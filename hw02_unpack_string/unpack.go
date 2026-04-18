@@ -11,32 +11,31 @@ var ErrInvalidString = errors.New("invalid string")
 
 func Unpack(input string) (string, error) {
 	builder := &strings.Builder{}
-	isUnpacking := true
 	var lastRune rune
+	hasLastRune := false
 
 	for _, char := range input {
 		if !unicode.IsDigit(char) {
-			if lastRune != 0 {
+			if hasLastRune {
 				builder.WriteRune(lastRune)
 			}
-			isUnpacking = false
 			lastRune = char
+			hasLastRune = true
 			continue
 		}
-		if isUnpacking {
+		if !hasLastRune {
 			return "", ErrInvalidString
 		}
-		isUnpacking = true
 		repeats, err := strconv.Atoi(string(char))
 		if err != nil {
 			return "", err
 		}
-		for _, char := range strings.Repeat(string(lastRune), repeats) {
-			builder.WriteRune(char)
+		for i := 0; i < repeats; i++ {
+			builder.WriteRune(lastRune)
 		}
-		lastRune = 0
+		hasLastRune = false
 	}
-	if lastRune != 0 {
+	if hasLastRune {
 		builder.WriteRune(lastRune)
 	}
 	return builder.String(), nil
