@@ -20,7 +20,12 @@ func Top10(text string) []string {
 		line := scanner.Text()
 		words := strings.Fields(line)
 		for _, word := range words {
-			wordStats[word]++
+			if word == "-" {
+				continue
+			}
+			word = strings.ToLower(word)
+			word = strings.Trim(word, ".,!?:;\"'()[]{}")
+			wordStats[strings.ToLower(word)]++
 		}
 	}
 	pl := make(PairList, 0, len(wordStats))
@@ -30,7 +35,7 @@ func Top10(text string) []string {
 
 	sort.Slice(pl, func(i, j int) bool {
 		if pl[i].Value == pl[j].Value {
-			return pl[i].Key < pl[j].Key
+			return strings.ToLower(pl[i].Key) < strings.ToLower(pl[j].Key)
 		}
 		return pl[i].Value > pl[j].Value
 	})
