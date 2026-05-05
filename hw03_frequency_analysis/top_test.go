@@ -7,7 +7,7 @@ import (
 )
 
 // Change to true if needed.
-var taskWithAsteriskIsCompleted = false
+var taskWithAsteriskIsCompleted = true
 
 var text = `Как видите, он  спускается  по  лестнице  вслед  за  своим
 	другом   Кристофером   Робином,   головой   вниз,  пересчитывая
@@ -78,5 +78,73 @@ func TestTop10(t *testing.T) {
 			}
 			require.Equal(t, expected, Top10(text))
 		}
+	})
+	t.Run("case insensitive", func(t *testing.T) {
+		if !taskWithAsteriskIsCompleted {
+			t.Skip("asterisk task is not completed")
+		}
+		text := "Нога нога НОГА ноГа"
+		expected := []string{"нога"}
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("trim punctuation around words", func(t *testing.T) {
+		if !taskWithAsteriskIsCompleted {
+			t.Skip("asterisk task is not completed")
+		}
+		text := `нога нога! нога, "нога" 'нога' (нога) [нога]`
+		expected := []string{"нога"}
+
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("do not trim punctuation inside word", func(t *testing.T) {
+		if !taskWithAsteriskIsCompleted {
+			t.Skip("asterisk task is not completed")
+		}
+
+		text := "dog,cat dog...cat dogcat"
+		expected := []string{"dog,cat", "dog...cat", "dogcat"}
+
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("hyphen inside word is significant", func(t *testing.T) {
+		if !taskWithAsteriskIsCompleted {
+			t.Skip("asterisk task is not completed")
+		}
+		text := "какой-то какойто какой-то"
+		expected := []string{"какой-то", "какойто"}
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("single hyphen is not a word but many hyphens are word", func(t *testing.T) {
+		if !taskWithAsteriskIsCompleted {
+			t.Skip("asterisk task is not completed")
+		}
+		text := "- ------- ------- слово"
+		expected := []string{"-------", "слово"}
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("sort lexicographically when frequency is equal", func(t *testing.T) {
+		text := "б в а г"
+		expected := []string{"а", "б", "в", "г"}
+
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("returns only top 10 words", func(t *testing.T) {
+		text := "a b c d e f g h i j k"
+		expected := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
+
+		require.Equal(t, expected, Top10(text))
+	})
+
+	t.Run("frequency has priority over lexicographical order", func(t *testing.T) {
+		text := "z z z a a b"
+		expected := []string{"z", "a", "b"}
+
+		require.Equal(t, expected, Top10(text))
 	})
 }
