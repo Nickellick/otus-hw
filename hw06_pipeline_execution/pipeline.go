@@ -23,7 +23,8 @@ func orDone(in, done In) In {
 
 	closeFunc := func() {
 		close(orDoneCh)
-		for range in {
+		for v := range in {
+			_ = v
 		}
 	}
 
