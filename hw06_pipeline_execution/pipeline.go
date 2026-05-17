@@ -21,13 +21,17 @@ func ExecutePipeline(in In, done In, stages ...Stage) Out {
 func orDone(in, done In) In {
 	orDoneCh := make(Bi)
 
+	closeFunc := func() {
+		close(orDoneCh)
+		for range in {
+		}
+	}
+
 	go func() {
-		defer close(orDoneCh)
+		defer closeFunc()
 		for {
 			select {
 			case <-done:
-				for range in {
-				}
 				return
 			case v, ok := <-in:
 				if !ok {
@@ -35,8 +39,6 @@ func orDone(in, done In) In {
 				}
 				select {
 				case <-done:
-					for range in {
-					}
 					return
 				case orDoneCh <- v:
 				}
