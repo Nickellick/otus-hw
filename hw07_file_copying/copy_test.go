@@ -7,92 +7,84 @@ import (
 	"testing"
 )
 
-func TestCopy(t *testing.T) {
-	t.Run("copies whole file when limit is zero", func(t *testing.T) {
-		dir := t.TempDir()
+func TestCopySuccess(t *testing.T) {
+	tests := []struct {
+		name   string
+		input  string
+		offset int64
+		limit  int64
+		want   string
+	}{
+		{
+			name:   "copies whole file when limit is zero",
+			input:  "hello world",
+			offset: 0,
+			limit:  0,
+			want:   "hello world",
+		},
+		{
+			name:   "copies from offset to end when limit is zero",
+			input:  "hello world",
+			offset: 6,
+			limit:  0,
+			want:   "world",
+		},
+		{
+			name:   "copies limited bytes from offset",
+			input:  "hello world",
+			offset: 6,
+			limit:  3,
+			want:   "wor",
+		},
+		{
+			name:   "copies empty file",
+			input:  "",
+			offset: 0,
+			limit:  0,
+			want:   "",
+		},
+		{
+			name:   "copies zero bytes when offset equals file size",
+			input:  "hello",
+			offset: 5,
+			limit:  0,
+			want:   "",
+		},
+		{
+			name:   "copies available bytes when limit exceeds available bytes",
+			input:  "hello",
+			offset: 2,
+			limit:  100,
+			want:   "llo",
+		},
+	}
 
-		fromPath := filepath.Join(dir, "input.txt")
-		toPath := filepath.Join(dir, "output.txt")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
 
-		err := os.WriteFile(fromPath, []byte("hello world"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
+			fromPath := writeTestFile(t, dir, "input.txt", tt.input)
+			toPath := filepath.Join(dir, "output.txt")
 
-		err = Copy(fromPath, toPath, 0, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
+			err := Copy(fromPath, toPath, tt.offset, tt.limit)
+			if err != nil {
+				t.Fatal(err)
+			}
 
-		got, err := os.ReadFile(toPath)
-		if err != nil {
-			t.Fatal(err)
-		}
+			got := readTestFile(t, toPath)
+			if got != tt.want {
+				t.Fatalf("got %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
 
-		want := "hello world"
-		if string(got) != want {
-			t.Fatalf("got %q, want %q", string(got), want)
-		}
-	})
-
-	t.Run("copies from offset to end when limit is zero", func(t *testing.T) {
-		dir := t.TempDir()
-
-		fromPath := filepath.Join(dir, "input.txt")
-		toPath := filepath.Join(dir, "output.txt")
-
-		err := os.WriteFile(fromPath, []byte("hello world"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = Copy(fromPath, toPath, 6, 0)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := os.ReadFile(toPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		want := "world"
-		if string(got) != want {
-			t.Fatalf("got %q, want %q", string(got), want)
-		}
-	})
-
-	t.Run("copies limited bytes from offset", func(t *testing.T) {
-		dir := t.TempDir()
-
-		fromPath := filepath.Join(dir, "input.txt")
-		toPath := filepath.Join(dir, "output.txt")
-
-		err := os.WriteFile(fromPath, []byte("hello world"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = Copy(fromPath, toPath, 6, 3)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		got, err := os.ReadFile(toPath)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		want := "wor"
-		if string(got) != want {
-			t.Fatalf("got %q, want %q", string(got), want)
-		}
-	})
-
+func TestCopyValidationErrors(t *testing.T) {
 	t.Run("returns error when source path is empty", func(t *testing.T) {
 		dir := t.TempDir()
 
 		toPath := filepath.Join(dir, "output.txt")
+
 		err := Copy("", toPath, 0, 0)
 		if err == nil {
 			t.Fatal("expected error, got nil")
@@ -102,14 +94,9 @@ func TestCopy(t *testing.T) {
 	t.Run("returns error when destination path is empty", func(t *testing.T) {
 		dir := t.TempDir()
 
-		fromPath := filepath.Join(dir, "input.txt")
+		fromPath := writeTestFile(t, dir, "input.txt", "hello")
 
-		err := os.WriteFile(fromPath, []byte("hello"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = Copy(fromPath, "", 0, 0)
+		err := Copy(fromPath, "", 0, 0)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -118,15 +105,10 @@ func TestCopy(t *testing.T) {
 	t.Run("returns error when offset is negative", func(t *testing.T) {
 		dir := t.TempDir()
 
-		fromPath := filepath.Join(dir, "input.txt")
+		fromPath := writeTestFile(t, dir, "input.txt", "hello")
 		toPath := filepath.Join(dir, "output.txt")
 
-		err := os.WriteFile(fromPath, []byte("hello"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = Copy(fromPath, toPath, -1, 0)
+		err := Copy(fromPath, toPath, -1, 0)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -135,51 +117,65 @@ func TestCopy(t *testing.T) {
 	t.Run("returns error when limit is negative", func(t *testing.T) {
 		dir := t.TempDir()
 
-		fromPath := filepath.Join(dir, "input.txt")
+		fromPath := writeTestFile(t, dir, "input.txt", "hello")
 		toPath := filepath.Join(dir, "output.txt")
 
-		err := os.WriteFile(fromPath, []byte("hello"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
-
-		err = Copy(fromPath, toPath, 0, -1)
+		err := Copy(fromPath, toPath, 0, -1)
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
 	})
+}
 
-	t.Run("returns ErrOffsetExceedsFileSize when offset is greater than file size", func(t *testing.T) {
-		dir := t.TempDir()
+func TestCopyOffsetExceedsFileSize(t *testing.T) {
+	dir := t.TempDir()
 
-		fromPath := filepath.Join(dir, "input.txt")
-		toPath := filepath.Join(dir, "output.txt")
+	fromPath := writeTestFile(t, dir, "input1.txt", "hello")
+	toPath := filepath.Join(dir, "output.txt")
 
-		err := os.WriteFile(fromPath, []byte("hello"), 0644)
-		if err != nil {
-			t.Fatal(err)
-		}
+	err := Copy(fromPath, toPath, 100, 0)
+	if !errors.Is(err, ErrOffsetExceedsFileSize) {
+		t.Fatalf("got %v, want %v", err, ErrOffsetExceedsFileSize)
+	}
+}
 
-		err = Copy(fromPath, toPath, 100, 0)
-		if !errors.Is(err, ErrOffsetExceedsFileSize) {
-			t.Fatalf("got %v, want %v", err, ErrOffsetExceedsFileSize)
-		}
-	})
+func TestCopyUnsupportedFile(t *testing.T) {
+	dir := t.TempDir()
 
-	t.Run("returns ErrUnsupportedFile when source is directory", func(t *testing.T) {
-		dir := t.TempDir()
+	fromPath := filepath.Join(dir, "source-dir")
+	toPath := filepath.Join(dir, "output.txt")
 
-		fromPath := filepath.Join(dir, "source-dir")
-		toPath := filepath.Join(dir, "output.txt")
+	err := os.Mkdir(fromPath, 0o755)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-		err := os.Mkdir(fromPath, 0755)
-		if err != nil {
-			t.Fatal(err)
-		}
+	err = Copy(fromPath, toPath, 0, 0)
+	if !errors.Is(err, ErrUnsupportedFile) {
+		t.Fatalf("got %v, want %v", err, ErrUnsupportedFile)
+	}
+}
 
-		err = Copy(fromPath, toPath, 0, 0)
-		if !errors.Is(err, ErrUnsupportedFile) {
-			t.Fatalf("got %v, want %v", err, ErrUnsupportedFile)
-		}
-	})
+func writeTestFile(t *testing.T, dir, name, content string) string {
+	t.Helper()
+
+	path := filepath.Join(dir, name)
+
+	err := os.WriteFile(path, []byte(content), 0o644)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return path
+}
+
+func readTestFile(t *testing.T, path string) string {
+	t.Helper()
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	return string(data)
 }

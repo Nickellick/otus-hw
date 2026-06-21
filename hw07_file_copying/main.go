@@ -22,5 +22,4 @@ func main() {
 		fmt.Fprintln(os.Stderr, "copy:", err)
 		os.Exit(1)
 	}
-
 }
