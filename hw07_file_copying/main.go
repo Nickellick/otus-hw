@@ -61,11 +61,29 @@ func main() {
 
 	var reader io.Reader = src
 
+	info, err := src.Stat()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "stat source:", err)
+		os.Exit(1)
+	}
+	available := info.Size() - offset
+	if available < 0 {
+		available = 0
+	}
+	total := available
 	if limit > 0 {
+		if limit < available {
+			total = limit
+		}
 		reader = io.LimitReader(src, limit)
 	}
 
-	written, err := io.Copy(dst, reader)
+	progressReader := &ProgressReader{
+		r:     reader,
+		total: total,
+	}
+
+	written, err := io.Copy(dst, progressReader)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "copy:", err)
 		os.Exit(1)
