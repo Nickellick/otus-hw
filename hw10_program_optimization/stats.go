@@ -29,13 +29,18 @@ func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
 	return countDomains(u, domain)
 }
 
-type users [100_000]User
+const maxUsers = 100_000
+
+type users [maxUsers]User
 
 func getUsers(r io.Reader) (result users, err error) {
 	scanner := bufio.NewScanner(r)
 	index := 0
 
 	for scanner.Scan() {
+		if index >= maxUsers {
+			return result, fmt.Errorf("too many users")
+		}
 		line := scanner.Bytes()
 
 		var user User
