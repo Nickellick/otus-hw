@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 )
 
@@ -22,54 +21,31 @@ type User struct {
 type DomainStat map[string]int
 
 func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
-	u, err := getUsers(r)
-	if err != nil {
-		return nil, fmt.Errorf("get users error: %w", err)
-	}
-	return countDomains(u, domain)
-}
-
-const maxUsers = 100_000
-
-type users [maxUsers]User
-
-func getUsers(r io.Reader) (result users, err error) {
+	suffix := "." + strings.ToLower(domain)
+	stat := make(DomainStat)
 	scanner := bufio.NewScanner(r)
-	index := 0
 
 	for scanner.Scan() {
-		if index >= maxUsers {
-			return result, fmt.Errorf("too many users")
-		}
 		line := scanner.Bytes()
 
 		var user User
-		if err = json.Unmarshal(line, &user); err != nil {
-			return result, err
-		}
-		result[index] = user
-		index++
-	}
-	if err = scanner.Err(); err != nil {
-		return result, fmt.Errorf("scan users: %w", err)
-	}
-	return
-}
-
-func countDomains(u users, domain string) (DomainStat, error) {
-	result := make(DomainStat)
-
-	for _, user := range u {
-		matched, err := regexp.Match("\\."+domain, []byte(user.Email))
-		if err != nil {
-			return nil, err
+		if err := json.Unmarshal(line, &user); err != nil {
+			return stat, err
 		}
 
-		if matched {
-			num := result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])]
-			num++
-			result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])] = num
+		_, localDomain, ok := strings.Cut(user.Email, "@")
+		if !ok {
+			continue
+		}
+
+		localDomain = strings.ToLower(localDomain)
+
+		if strings.HasSuffix(localDomain, suffix) {
+			stat[localDomain]++
 		}
 	}
-	return result, nil
+	if err := scanner.Err(); err != nil {
+		return stat, fmt.Errorf("scan users: %w", err)
+	}
+	return stat, nil
 }
