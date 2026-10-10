@@ -1,6 +1,7 @@
 package hw10programoptimization
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,18 +32,21 @@ func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
 type users [100_000]User
 
 func getUsers(r io.Reader) (result users, err error) {
-	content, err := io.ReadAll(r)
-	if err != nil {
-		return
-	}
+	scanner := bufio.NewScanner(r)
+	index := 0
 
-	lines := strings.Split(string(content), "\n")
-	for i, line := range lines {
+	for scanner.Scan() {
+		line := scanner.Bytes()
+
 		var user User
-		if err = json.Unmarshal([]byte(line), &user); err != nil {
-			return
+		if err = json.Unmarshal(line, &user); err != nil {
+			return result, err
 		}
-		result[i] = user
+		result[index] = user
+		index++
+	}
+	if err = scanner.Err(); err != nil {
+		return result, fmt.Errorf("scan users: %w", err)
 	}
 	return
 }
