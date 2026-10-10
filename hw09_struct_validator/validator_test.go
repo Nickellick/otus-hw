@@ -260,3 +260,44 @@ func TestValidate_InvalidAge(t *testing.T) {
 		t.Errorf("expected ErrLessThanMin, got %v", validationErrors[0].Err)
 	}
 }
+
+func TestValidate_Unsupported(t *testing.T) {
+	value := struct {
+		Rate float64 `validate:"min:10"`
+	}{
+		Rate: 5.5,
+	}
+
+	err := Validate(value)
+
+	if !errors.Is(err, ErrUnsupported) {
+		t.Errorf("expected ErrUnsupported, got %v", err)
+	}
+}
+
+func TestValidate_Nil(t *testing.T) {
+	err := Validate(nil)
+
+	if !errors.Is(err, ErrNotStruct) {
+		t.Errorf("expected ErrNotStruct, got %v", err)
+	}
+}
+
+func TestValidate_IntSlice(t *testing.T) {
+	value := struct {
+		Numbers []int `validate:"min:10"`
+	}{
+		Numbers: []int{1, 20, 3},
+	}
+
+	err := Validate(value)
+
+	var validationErrors ValidationErrors
+	if !errors.As(err, &validationErrors) {
+		t.Fatalf("expected ValidationErrors, got %T: %v", err, err)
+	}
+
+	if len(validationErrors) != 2 {
+		t.Fatalf("expected 2 errors, got %d", len(validationErrors))
+	}
+}
