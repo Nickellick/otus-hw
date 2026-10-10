@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,7 +27,7 @@ func ReadDir(dir string) (Environment, error) {
 	}
 	environments := make(Environment, len(entries))
 	for _, entry := range entries {
-		if entry.IsDir() {
+		if !entry.Type().IsRegular() {
 			continue
 		}
 		if strings.Contains(entry.Name(), "=") {
@@ -38,15 +41,26 @@ func ReadDir(dir string) (Environment, error) {
 	return environments, nil
 }
 
-func readFile(path string) (EnvValue, error) {
-	data, err := os.ReadFile(path)
+func readFile(path string) (envValue EnvValue, err error) {
+	file, err := os.Open(path)
 	if err != nil {
+		return EnvValue{}, fmt.Errorf("failed to open file %s: %w", path, err)
+	}
+	defer func() {
+		closeErr := file.Close()
+		if err == nil {
+			err = closeErr
+		}
+	}()
+	reader := bufio.NewReader(file)
+	firstLine, err := reader.ReadString('\n')
+	if err != nil && !errors.Is(err, io.EOF) {
 		return EnvValue{}, fmt.Errorf("failed to read file %s: %w", path, err)
 	}
-	if len(data) == 0 {
+	if len(firstLine) == 0 {
 		return EnvValue{NeedRemove: true}, nil
 	}
-	firstLine, _, _ := strings.Cut(string(data), "\n")
+	firstLine = strings.TrimSuffix(firstLine, "\n")
 	firstLine = strings.TrimRight(firstLine, " \t")
 	firstLine = strings.ReplaceAll(firstLine, "\x00", "\n")
 	return EnvValue{Value: firstLine, NeedRemove: false}, nil

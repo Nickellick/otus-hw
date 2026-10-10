@@ -79,6 +79,42 @@ func TestReadDir(t *testing.T) {
 				"VALID": {Value: "hello"},
 			},
 		},
+		{
+			name: "file without trailing newline",
+			files: map[string]string{
+				"FOO": "hello",
+			},
+			expected: Environment{
+				"FOO": {Value: "hello"},
+			},
+		},
+		{
+			name: "trailing spaces before newline",
+			files: map[string]string{
+				"FOO": "hello   \nworld",
+			},
+			expected: Environment{
+				"FOO": {Value: "hello"},
+			},
+		},
+		{
+			name: "trailing null byte",
+			files: map[string]string{
+				"FOO": "foo\x00",
+			},
+			expected: Environment{
+				"FOO": {Value: "foo\n"},
+			},
+		},
+		{
+			name: "file containing only newline",
+			files: map[string]string{
+				"FOO": "\n",
+			},
+			expected: Environment{
+				"FOO": {Value: "", NeedRemove: false},
+			},
+		},
 	}
 
 	for _, tt := range tests {
