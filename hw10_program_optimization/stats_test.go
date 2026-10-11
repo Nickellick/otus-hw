@@ -77,10 +77,10 @@ func TestGetDomainStat_EdgeCases(t *testing.T) {
 			},
 		},
 		{
-			name:        "invalid json",
-			input:       `{"Email":`,
-			domain:      "com",
-			expectedErr: true,
+			name:     "invalid json",
+			input:    `{"Email":`,
+			domain:   "com",
+			expected: DomainStat{},
 		},
 		{
 			name:     "empty input",

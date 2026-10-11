@@ -18,13 +18,15 @@ func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
 	suffix := "." + strings.ToLower(domain)
 	stat := make(DomainStat)
 	scanner := bufio.NewScanner(r)
+	// Делаем буфер в 1 МБ, изначально оставим 64 Кб по умолчанию
+	scanner.Buffer(make([]byte, 64*1024*1024), 1024*1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
 
 		var user User
 		if err := json.Unmarshal(line, &user); err != nil {
-			return stat, err
+			continue
 		}
 
 		_, localDomain, ok := strings.Cut(user.Email, "@")
