@@ -20,6 +20,7 @@ linters-settings:
           - github.com/google/uuid
           - github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar
           - github.com/jackc/pgx/v5
+          - gopkg.in/yaml.v3
       Test:
         files:
           - $test
