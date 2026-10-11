@@ -26,6 +26,7 @@ func main() {
 	}
 	os.Exit(code)
 }
+
 func run(args []string) (int, error) {
 	flags := flag.NewFlagSet("go-telnet", flag.ContinueOnError)
 
