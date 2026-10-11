@@ -10,6 +10,7 @@ POSTGRES_PASSWORD ?= password
 POSTGRES_DB ?= backend
 POSTGRES_PORT ?= 5435
 POSTGRES_CONTAINER := postgres-calendar
+POSTGRES_DSN := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@127.0.0.1:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
 #Rabbit
 RABBIT_USER ?= rabbit
@@ -18,6 +19,7 @@ RABBIT_PORT ?= 5672
 RABBIT_PORT_UI ?= 15672
 RABBIT_CONTAINER := rabbitmq
 
+COMPOSE := docker compose -f deployments/docker-compose.yaml
 
 run-postgres:
 	docker run -d --name $(POSTGRES_CONTAINER) \
@@ -63,4 +65,25 @@ install-lint-deps:
 lint: install-lint-deps
 	golangci-lint run ./...
 
-.PHONY: build run build-img run-img version test lint
+db-up:
+	$(COMPOSE) up -d --wait postgres
+
+db-down:
+	$(COMPOSE) down
+
+db-logs:
+	$(COMPOSE) logs -f postgres
+
+db-shell:
+	$(COMPOSE) exec postgres \
+		psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+migrate:
+	goose -dir migrations postgres "$(POSTGRES_DSN)" up
+
+migrate-down:
+	goose -dir migrations postgres "$(POSTGRES_DSN)" down
+
+migrate-status:
+	goose -dir migrations postgres "$(POSTGRES_DSN)" status
+
+.PHONY: build run build-img run-img version test lint db-up db-down db-logs db-shell
