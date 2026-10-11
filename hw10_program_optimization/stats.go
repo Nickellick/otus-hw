@@ -19,7 +19,7 @@ func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
 	stat := make(DomainStat)
 	scanner := bufio.NewScanner(r)
 	// Делаем буфер в 1 МБ, изначально оставим 64 Кб по умолчанию
-	scanner.Buffer(make([]byte, 64*1024*1024), 1024*1024*1024)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
 	for scanner.Scan() {
 		line := scanner.Bytes()
