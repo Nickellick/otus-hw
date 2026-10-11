@@ -17,12 +17,17 @@ linters-settings:
         allow:
           - $gostd
           - golang.org/x/example/hello/reverse
+          - github.com/google/uuid
+          - github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar
       Test:
         files:
           - $test
         allow:
           - $gostd
           - github.com/stretchr/testify
+          - github.com/google/uuid
+          - github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar
+          - 
 issues:
   exclude-rules:
     - path: _test\.go
