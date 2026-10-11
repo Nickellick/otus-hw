@@ -8,6 +8,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	sqlStorage    = "sql"
+	memoryStorage = "memory"
+)
+
 type LoggerConf struct {
 	Level string `yaml:"level"`
 }
@@ -23,8 +28,8 @@ type StorageConf struct {
 
 type PostgresConf struct {
 	DSN          string `yaml:"dsn"`
-	MaxOpenConns int    `yaml:"max_open_conns"`
-	MaxIdleConns int    `yaml:"max_idle_conns"`
+	MaxOpenConns int    `yaml:"maxOpenConns"`
+	MaxIdleConns int    `yaml:"maxIdleConns"`
 }
 
 type Config struct {
@@ -44,7 +49,7 @@ func NewConfig() Config {
 			Port: 8080,
 		},
 		Storage: StorageConf{
-			Type: "memory",
+			Type: memoryStorage,
 		},
 		Postgres: PostgresConf{
 			MaxOpenConns: 10,
@@ -69,8 +74,8 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	switch cfg.Storage.Type {
-	case "memory":
-	case "sql":
+	case memoryStorage:
+	case sqlStorage:
 		if cfg.Postgres.DSN == "" {
 			return nil, fmt.Errorf("postgres DSN is required")
 		}
@@ -86,7 +91,7 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("postgres connection limits cannot be negative")
 	}
 
-	if cfg.Storage.Type == "sql" &&
+	if cfg.Storage.Type == sqlStorage &&
 		cfg.Postgres.MaxOpenConns > 0 &&
 		cfg.Postgres.MaxIdleConns > cfg.Postgres.MaxOpenConns {
 		return nil, fmt.Errorf("max idle connections exceeds max open connections")

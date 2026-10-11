@@ -6,7 +6,8 @@ http:
   port: 8080
 
 storage:
-  type: memory # sql for postgres, memory for in-memory
+#  type: memory # sql for postgres, memory for in-memory
+  type: sql
 
 postgres:
   dsn: postgres://postgres:password@127.0.0.1:5435/backend?sslmode=disable

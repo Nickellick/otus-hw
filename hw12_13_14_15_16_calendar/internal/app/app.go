@@ -4,10 +4,8 @@ import (
 	"context"
 	"time"
 
-	"github.com/google/uuid"
-
-	// Замени на актуальный путь из go.mod.
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
+	"github.com/google/uuid"
 )
 
 type Storage interface {

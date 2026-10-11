@@ -10,6 +10,7 @@ import (
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
+	//no:revive // https://pkg.go.dev/github.com/jackc/pgx/v5/stdlib
 	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
@@ -64,7 +65,6 @@ func (s *Storage) Create(ctx context.Context, event storage.Event) error {
 		event.EndsAt,
 		int64(event.NotifyBefore),
 	)
-
 	if err != nil {
 		return fmt.Errorf("create event: %w", mapError(err))
 	}
@@ -100,7 +100,6 @@ func (s *Storage) Update(ctx context.Context, event storage.Event) error {
 		event.EndsAt,
 		int64(event.NotifyBefore),
 	)
-
 	if err != nil {
 		return fmt.Errorf("update event: %w", mapError(err))
 	}
@@ -213,13 +212,13 @@ func mapError(err error) error {
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
 		case "23P01":
-			return fmt.Errorf("%w: %v", storage.ErrDateBusy, err)
+			return fmt.Errorf("%w: %w", storage.ErrDateBusy, err)
 
 		case "23505":
-			return fmt.Errorf("%w: %v", storage.ErrEventExists, err)
+			return fmt.Errorf("%w: %w", storage.ErrEventExists, err)
 
 		case "23514":
-			return fmt.Errorf("%w: %v", storage.ErrInvalidEvent, err)
+			return fmt.Errorf("%w: %w", storage.ErrInvalidEvent, err)
 		}
 	}
 

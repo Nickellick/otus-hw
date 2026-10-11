@@ -1,6 +1,7 @@
 package logger
 
 import (
+	"io"
 	"log/slog"
 	"os"
 	"strings"
@@ -11,6 +12,10 @@ type Logger struct {
 }
 
 func New(level string) *Logger {
+	return newLogger(level, os.Stdout)
+}
+
+func newLogger(level string, output io.Writer) *Logger {
 	var logLevel slog.Level
 
 	switch strings.ToLower(level) {
@@ -24,7 +29,7 @@ func New(level string) *Logger {
 		logLevel = slog.LevelInfo
 	}
 
-	handler := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{
+	handler := slog.NewJSONHandler(output, &slog.HandlerOptions{
 		Level: logLevel,
 	})
 

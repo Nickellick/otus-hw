@@ -64,9 +64,14 @@ func run() error {
 
 	calendar := app.New(logg, storage)
 
-	server := internalhttp.NewServer(logg, calendar)
+	server := internalhttp.NewServer(
+		logg,
+		calendar,
+		config.HTTP.Host,
+		config.HTTP.Port,
+	)
 
-	shutdownDone := make(chan struct{})
+	shutdownDone := make(chan error, 1)
 
 	go func() {
 		defer close(shutdownDone)
@@ -76,9 +81,7 @@ func run() error {
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*3)
 		defer shutdownCancel()
 
-		if err := server.Stop(shutdownCtx); err != nil {
-			logg.Error("failed to stop http server: " + err.Error())
-		}
+		shutdownDone <- server.Stop(shutdownCtx)
 	}()
 
 	logg.Info("calendar is running...")
