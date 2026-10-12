@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/signal"
@@ -29,6 +30,8 @@ func main() {
 
 func run(args []string) (int, error) {
 	flags := flag.NewFlagSet("go-telnet", flag.ContinueOnError)
+
+	flags.SetOutput(io.Discard)
 
 	timeout := flags.Duration(
 		"timeout",
