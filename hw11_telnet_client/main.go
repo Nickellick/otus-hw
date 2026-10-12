@@ -69,6 +69,7 @@ func run(args []string) (int, error) {
 	ctx, stop := signal.NotifyContext(
 		context.Background(),
 		os.Interrupt,
+		os.Kill,
 	)
 	defer stop()
 
