@@ -3,54 +3,69 @@ package internalhttp
 import (
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
-type testLogger struct {
-	messages []string
+type capturedLog struct {
+	message string
+	args    []any
 }
 
-func (l *testLogger) Info(msg string) {
-	l.messages = append(l.messages, msg)
+type captureLogger struct {
+	entries []capturedLog
 }
 
-func (l *testLogger) Error(string) {}
+func (l *captureLogger) Info(msg string, args ...any) {
+	l.entries = append(l.entries, capturedLog{
+		message: msg,
+		args:    args,
+	})
+}
+
+func (l *captureLogger) Error(string, ...any) {}
 
 func TestLoggingMiddleware(t *testing.T) {
-	logger := &testLogger{}
+	logg := &captureLogger{}
 
 	handler := http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusCreated)
-		_, _ = w.Write([]byte("created"))
 	})
 
-	wrapped := loggingMiddleware(logger, handler)
+	req := httptest.NewRequest(http.MethodPost, "/hello?q=1", nil)
+	req.RemoteAddr = "192.0.2.10:12345"
+	req.Header.Set("User-Agent", "calendar-test")
 
-	request := httptest.NewRequest(
-		http.MethodPost,
-		"/hello?q=1",
-		nil,
-	)
+	rec := httptest.NewRecorder()
 
-	request.RemoteAddr = "127.0.0.1:12345"
+	loggingMiddleware(logg, handler).ServeHTTP(rec, req)
 
-	request.Header.Set("User-Agent", "calendar-test")
+	require.Equal(t, http.StatusCreated, rec.Code)
+	require.Len(t, logg.entries, 1)
 
-	recorder := httptest.NewRecorder()
+	entry := logg.entries[0]
 
-	wrapped.ServeHTTP(recorder, request)
+	require.Equal(t, "http request", entry.message)
 
-	require.Equal(t, http.StatusCreated, recorder.Code)
-	require.Equal(t, "created", recorder.Body.String())
+	attrs := make(map[string]any)
 
-	require.Len(t, logger.messages, 1)
+	for i := 0; i < len(entry.args); i += 2 {
+		key, ok := entry.args[i].(string)
+		require.True(t, ok)
 
-	require.Contains(t, logger.messages[0], "POST /hello?q=1 HTTP/1.1")
-	require.Contains(t, logger.messages[0], "201")
-	require.Contains(t, logger.messages[0], "calendar-test")
+		attrs[key] = entry.args[i+1]
+	}
 
-	require.True(t, strings.Contains(logger.messages[0], "127.0.0.1"))
+	require.Equal(t, "192.0.2.10", attrs["ip"])
+	require.Equal(t, "POST", attrs["method"])
+	require.Equal(t, "/hello", attrs["path"])
+	require.Equal(t, "q=1", attrs["query"])
+	require.Equal(t, "HTTP/1.1", attrs["proto"])
+	require.Equal(t, 201, attrs["status"])
+	require.Equal(t, "calendar-test", attrs["user_agent"])
+
+	latency, ok := attrs["latency_ms"].(float64)
+	require.True(t, ok)
+	require.GreaterOrEqual(t, latency, 0.0)
 }

@@ -11,8 +11,8 @@ import (
 )
 
 type Logger interface {
-	Info(msg string)
-	Error(msg string)
+	Info(msg string, args ...any)
+	Error(msg string, args ...any)
 }
 
 type Application interface{}

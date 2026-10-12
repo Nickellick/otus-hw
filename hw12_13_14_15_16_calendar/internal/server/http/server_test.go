@@ -13,8 +13,8 @@ import (
 
 type mockLogger struct{}
 
-func (mockLogger) Info(string)  {}
-func (mockLogger) Error(string) {}
+func (mockLogger) Info(string, ...any)  {}
+func (mockLogger) Error(string, ...any) {}
 
 func TestServerRoutes(t *testing.T) {
 	tests := []struct {
@@ -65,6 +65,7 @@ func TestServerRoutes(t *testing.T) {
 func TestServerStartStop(t *testing.T) {
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+	defer listener.Close()
 
 	server := NewServer(mockLogger{}, nil, "127.0.0.1", 0)
 
@@ -84,19 +85,27 @@ func TestServerStartStop(t *testing.T) {
 		"http://"+listener.Addr().String()+"/hello",
 		nil,
 	)
+
 	require.NoError(t, err)
 
 	response, err := client.Do(req)
 	require.NoError(t, err)
-	defer response.Body.Close()
 
 	require.Equal(t, http.StatusOK, response.StatusCode)
+	require.NoError(t, response.Body.Close())
 
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 
 	require.NoError(t, server.Stop(ctx))
-	require.NoError(t, <-done)
+	require.Equal(t, http.StatusOK, response.StatusCode)
+
+	select {
+	case err := <-done:
+		require.NoError(t, err)
+	case <-time.After(3 * time.Second):
+		t.Fatal("server did not stop")
+	}
 }
 
 func TestServerGracefulShutdown(t *testing.T) {

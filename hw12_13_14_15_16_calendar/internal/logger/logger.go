@@ -33,23 +33,21 @@ func newLogger(level string, output io.Writer) *Logger {
 		Level: logLevel,
 	})
 
-	return &Logger{
-		logger: slog.New(handler),
-	}
+	return &Logger{logger: slog.New(handler)}
 }
 
-func (l *Logger) Debug(msg string) {
-	l.logger.Debug(msg)
+func (l *Logger) Debug(msg string, args ...any) {
+	l.logger.Debug(msg, args...)
 }
 
-func (l *Logger) Info(msg string) {
-	l.logger.Info(msg)
+func (l *Logger) Info(msg string, args ...any) {
+	l.logger.Info(msg, args...)
 }
 
-func (l *Logger) Warn(msg string) {
-	l.logger.Warn(msg)
+func (l *Logger) Warn(msg string, args ...any) {
+	l.logger.Warn(msg, args...)
 }
 
-func (l *Logger) Error(msg string) {
-	l.logger.Error(msg)
+func (l *Logger) Error(msg string, args ...any) {
+	l.logger.Error(msg, args...)
 }

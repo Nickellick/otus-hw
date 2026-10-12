@@ -1,7 +1,6 @@
 package internalhttp
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"time"
@@ -29,10 +28,7 @@ func (w *responseWriter) Write(data []byte) (int, error) {
 	return w.ResponseWriter.Write(data)
 }
 
-func loggingMiddleware(
-	logger Logger,
-	next http.Handler,
-) http.Handler {
+func loggingMiddleware(logger Logger, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 
@@ -42,25 +38,26 @@ func loggingMiddleware(
 
 		next.ServeHTTP(wrapped, r)
 
-		if wrapped.status == 0 {
-			wrapped.status = http.StatusOK
+		status := wrapped.status
+		if status == 0 {
+			status = http.StatusOK
 		}
 
-		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		ip, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
-			host = r.RemoteAddr
+			ip = r.RemoteAddr
 		}
 
-		logger.Info(fmt.Sprintf(
-			"%s [%s] %s %s %s %d %s %q",
-			host,
-			start.Format("02/Jan/2006:15:04:05 -0700"),
-			r.Method,
-			r.URL.RequestURI(),
-			r.Proto,
-			wrapped.status,
-			time.Since(start),
-			r.UserAgent(),
-		))
+		logger.Info(
+			"http request",
+			"ip", ip,
+			"method", r.Method,
+			"path", r.URL.Path,
+			"query", r.URL.RawQuery,
+			"proto", r.Proto,
+			"status", status,
+			"latency_ms", float64(time.Since(start).Microseconds())/1000,
+			"user_agent", r.UserAgent(),
+		)
 	})
 }
