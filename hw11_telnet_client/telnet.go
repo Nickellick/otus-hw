@@ -43,12 +43,18 @@ func (c *telnetClient) Connect() error {
 
 func (c *telnetClient) Send() error {
 	_, err := io.Copy(c.conn, c.in)
-	return err
+	if err != nil {
+		return fmt.Errorf("send error: %w", err)
+	}
+	return nil
 }
 
 func (c *telnetClient) Receive() error {
 	_, err := io.Copy(c.out, c.conn)
-	return err
+	if err != nil {
+		return fmt.Errorf("receive error: %w", err)
+	}
+	return nil
 }
 
 func (c *telnetClient) Close() error {
