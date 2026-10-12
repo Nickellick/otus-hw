@@ -59,7 +59,7 @@ version: build
 	$(BIN) version
 
 test:
-	go test -race ./internal/... ./pkg/...
+	go test -race ./...
 
 install-lint-deps:
 	@command -v golangci-lint >/dev/null || \
