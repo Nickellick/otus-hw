@@ -1,66 +1,47 @@
 package hw10programoptimization
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
-	"regexp"
 	"strings"
 )
 
 type User struct {
-	ID       int
-	Name     string
-	Username string
-	Email    string
-	Phone    string
-	Password string
-	Address  string
+	Email string
 }
 
 type DomainStat map[string]int
 
 func GetDomainStat(r io.Reader, domain string) (DomainStat, error) {
-	u, err := getUsers(r)
-	if err != nil {
-		return nil, fmt.Errorf("get users error: %w", err)
-	}
-	return countDomains(u, domain)
-}
+	suffix := "." + strings.ToLower(domain)
+	stat := make(DomainStat)
+	scanner := bufio.NewScanner(r)
+	// Делаем буфер в 1 МБ, изначально оставим 64 Кб по умолчанию
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 
-type users [100_000]User
+	for scanner.Scan() {
+		line := scanner.Bytes()
 
-func getUsers(r io.Reader) (result users, err error) {
-	content, err := io.ReadAll(r)
-	if err != nil {
-		return
-	}
-
-	lines := strings.Split(string(content), "\n")
-	for i, line := range lines {
 		var user User
-		if err = json.Unmarshal([]byte(line), &user); err != nil {
-			return
-		}
-		result[i] = user
-	}
-	return
-}
-
-func countDomains(u users, domain string) (DomainStat, error) {
-	result := make(DomainStat)
-
-	for _, user := range u {
-		matched, err := regexp.Match("\\."+domain, []byte(user.Email))
-		if err != nil {
-			return nil, err
+		if err := json.Unmarshal(line, &user); err != nil {
+			continue
 		}
 
-		if matched {
-			num := result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])]
-			num++
-			result[strings.ToLower(strings.SplitN(user.Email, "@", 2)[1])] = num
+		_, localDomain, ok := strings.Cut(user.Email, "@")
+		if !ok {
+			continue
+		}
+
+		localDomain = strings.ToLower(localDomain)
+
+		if strings.HasSuffix(localDomain, suffix) {
+			stat[localDomain]++
 		}
 	}
-	return result, nil
+	if err := scanner.Err(); err != nil {
+		return stat, fmt.Errorf("scan users: %w", err)
+	}
+	return stat, nil
 }

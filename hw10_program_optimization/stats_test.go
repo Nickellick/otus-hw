@@ -1,9 +1,11 @@
+//go:build !bench
 // +build !bench
 
 package hw10programoptimization
 
 import (
 	"bytes"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -36,4 +38,86 @@ func TestGetDomainStat(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, DomainStat{}, result)
 	})
+}
+
+func TestGetDomainStat_EdgeCases(t *testing.T) {
+	tests := []struct {
+		name        string
+		input       string
+		domain      string
+		expected    DomainStat
+		expectedErr bool
+	}{
+		{
+			name: "case insensitive domains",
+			input: `{"Email":"alice@Google.COM"}
+{"Email":"bob@google.com"}
+{"Email":"charlie@GOOGLE.Com"}`,
+			domain: "COM",
+			expected: DomainStat{
+				"google.com": 3,
+			},
+		},
+		{
+			name: "email without at sign",
+			input: `{"Email":"invalid-email"}
+{"Email":"valid@example.com"}`,
+			domain: "com",
+			expected: DomainStat{
+				"example.com": 1,
+			},
+		},
+		{
+			name: "domain must match suffix",
+			input: `{"Email":"alice@example.biz.com"}
+{"Email":"bob@example.biz"}`,
+			domain: "biz",
+			expected: DomainStat{
+				"example.biz": 1,
+			},
+		},
+		{
+			name:     "invalid json",
+			input:    `{"Email":`,
+			domain:   "com",
+			expected: DomainStat{},
+		},
+		{
+			name:     "empty input",
+			input:    "",
+			domain:   "com",
+			expected: DomainStat{},
+		},
+		{
+			name:   "last line without newline",
+			input:  `{"Email":"alice@example.com"}`,
+			domain: "com",
+			expected: DomainStat{
+				"example.com": 1,
+			},
+		},
+		{
+			name:     "different top-level domain",
+			input:    `{"Email":"alice@example.org"}`,
+			domain:   "com",
+			expected: DomainStat{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := GetDomainStat(
+				strings.NewReader(tt.input),
+				tt.domain,
+			)
+
+			if tt.expectedErr {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, result)
+		})
+	}
 }
