@@ -69,3 +69,30 @@ func TestLoggingMiddleware(t *testing.T) {
 	require.True(t, ok)
 	require.GreaterOrEqual(t, latency, 0.0)
 }
+
+type flushRecorder struct {
+	*httptest.ResponseRecorder
+	flushed bool
+}
+
+func (r *flushRecorder) Flush() {
+	r.flushed = true
+	r.ResponseRecorder.Flush()
+}
+
+func TestResponseWriterFlush(t *testing.T) {
+	recorder := &flushRecorder{
+		ResponseRecorder: httptest.NewRecorder(),
+	}
+
+	wrapped := &responseWriter{
+		ResponseWriter: recorder,
+	}
+
+	wrapped.Flush()
+
+	require.True(t, recorder.flushed)
+	require.Equal(t, http.StatusOK, wrapped.status)
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.True(t, recorder.Flushed)
+}
