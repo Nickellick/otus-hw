@@ -1,6 +1,8 @@
 BIN := "./bin/calendar"
 DOCKER_IMG="calendar:develop"
 
+GOLANGCI_LINT_VERSION := v1.63.4
+
 GIT_HASH := $(shell git log --format="%h" -n 1)
 LDFLAGS := -X main.release="develop" -X main.buildDate=$(shell date -u +%Y-%m-%dT%H:%M:%S) -X main.gitHash=$(GIT_HASH)
 
@@ -10,6 +12,7 @@ POSTGRES_PASSWORD ?= password
 POSTGRES_DB ?= backend
 POSTGRES_PORT ?= 5435
 POSTGRES_CONTAINER := postgres-calendar
+POSTGRES_DSN := postgres://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@127.0.0.1:$(POSTGRES_PORT)/$(POSTGRES_DB)?sslmode=disable
 
 #Rabbit
 RABBIT_USER ?= rabbit
@@ -18,6 +21,7 @@ RABBIT_PORT ?= 5672
 RABBIT_PORT_UI ?= 15672
 RABBIT_CONTAINER := rabbitmq
 
+COMPOSE := docker compose -f deployments/docker-compose.yaml
 
 run-postgres:
 	docker run -d --name $(POSTGRES_CONTAINER) \
@@ -40,7 +44,7 @@ build:
 	go build -v -o $(BIN) -ldflags "$(LDFLAGS)" ./cmd/calendar
 
 run: build
-	$(BIN) -config ./configs/config.toml
+	$(BIN) -config ./configs/config.yaml
 
 build-img:
 	docker build \
@@ -55,12 +59,35 @@ version: build
 	$(BIN) version
 
 test:
-	go test -race ./internal/... ./pkg/...
+	go test -race ./...
 
 install-lint-deps:
-	(which golangci-lint > /dev/null) || curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(shell go env GOPATH)/bin v1.57.2
+	@command -v golangci-lint >/dev/null || \
+		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | \
+		sh -s -- -b $(shell go env GOPATH)/bin $(GOLANGCI_LINT_VERSION)
 
 lint: install-lint-deps
-	golangci-lint run ./...
+	golangci-lint run --concurrency=2 --timeout=5m ./...
 
-.PHONY: build run build-img run-img version test lint
+db-up:
+	$(COMPOSE) up -d --wait postgres
+
+db-down:
+	$(COMPOSE) down
+
+db-logs:
+	$(COMPOSE) logs -f postgres
+
+db-shell:
+	$(COMPOSE) exec postgres \
+		psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+migrate:
+	goose -dir migrations postgres "$(POSTGRES_DSN)" up
+
+migrate-down:
+	goose -dir migrations postgres "$(POSTGRES_DSN)" down
+
+migrate-status:
+	goose -dir migrations postgres "$(POSTGRES_DSN)" status
+
+.PHONY: build run build-img run-img version test lint db-up db-down db-logs db-shell
