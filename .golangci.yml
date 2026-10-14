@@ -20,6 +20,7 @@ linters-settings:
           - github.com/google/uuid
           - github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar
           - github.com/jackc/pgx/v5
+          - github.com/rgurov/pgerrors
           - gopkg.in/yaml.v3
       Test:
         files:
@@ -31,6 +32,7 @@ linters-settings:
           - github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar
           - github.com/pressly/goose/v3
           - github.com/testcontainers/testcontainers-go
+          - github.com/rgurov/pgerrors
           - github.com/jackc/pgx/v5
 issues:
   exclude-rules:

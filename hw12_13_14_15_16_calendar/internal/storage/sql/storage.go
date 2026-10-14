@@ -10,8 +10,8 @@ import (
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
-	//no:revive // https://pkg.go.dev/github.com/jackc/pgx/v5/stdlib
-	_ "github.com/jackc/pgx/v5/stdlib"
+	_ "github.com/jackc/pgx/v5/stdlib" //no:revive // https://pkg.go.dev/github.com/jackc/pgx/v5/stdlib
+	"github.com/rgurov/pgerrors"
 )
 
 type Storage struct {
@@ -211,13 +211,13 @@ func mapError(err error) error {
 
 	if errors.As(err, &pgErr) {
 		switch pgErr.Code {
-		case "23P01":
+		case pgerrors.ExclusionViolation:
 			return fmt.Errorf("%w: %w", storage.ErrDateBusy, err)
 
-		case "23505":
+		case pgerrors.UniqueViolation:
 			return fmt.Errorf("%w: %w", storage.ErrEventExists, err)
 
-		case "23514":
+		case pgerrors.CheckViolation:
 			return fmt.Errorf("%w: %w", storage.ErrInvalidEvent, err)
 		}
 	}
