@@ -8,6 +8,8 @@ import (
 	"net/http"
 	"strconv"
 	"time"
+
+	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
 )
 
 type Logger interface {
@@ -15,8 +17,9 @@ type Logger interface {
 	Error(msg string, args ...any)
 }
 
-type Application interface{}
-
+type Application interface {
+	CreateEvent(ctx context.Context, event storage.Event) error
+}
 type Server struct {
 	server *http.Server
 	logger Logger
@@ -34,7 +37,7 @@ func NewServer(
 	return &Server{
 		server: &http.Server{
 			Addr:              address,
-			Handler:           newHandler(logger),
+			Handler:           newHandler(logger, app),
 			ReadHeaderTimeout: 5 * time.Second,
 		},
 		logger: logger,
@@ -42,13 +45,14 @@ func NewServer(
 	}
 }
 
-func newHandler(logger Logger) http.Handler {
+func newHandler(logger Logger, app Application) http.Handler {
 	mux := http.NewServeMux()
 
 	mux.HandleFunc("GET /hello", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 		_, _ = w.Write([]byte("Hello, world!\n"))
 	})
+	mux.Handle("POST /events", createEventHandler(app))
 
 	return loggingMiddleware(logger, mux)
 }
