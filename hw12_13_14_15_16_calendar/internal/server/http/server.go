@@ -19,6 +19,7 @@ type Logger interface {
 
 type Application interface {
 	CreateEvent(ctx context.Context, event storage.Event) error
+	UpdateEvent(ctx context.Context, event storage.Event) error
 }
 type Server struct {
 	server *http.Server
@@ -53,6 +54,7 @@ func newHandler(logger Logger, app Application) http.Handler {
 		_, _ = w.Write([]byte("Hello, world!\n"))
 	})
 	mux.Handle("POST /events", createEventHandler(app))
+	mux.Handle("PUT /events/{id}", updateEventHandler(app))
 
 	return loggingMiddleware(logger, mux)
 }
