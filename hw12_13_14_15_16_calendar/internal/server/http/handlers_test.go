@@ -28,6 +28,14 @@ type mockApplication struct {
 	deletedID    uuid.UUID
 	deleteCalled bool
 	deleteErr    error
+
+	listMethod string
+	listUserID int64
+	listDate   time.Time
+	listCalls  int
+
+	listResult []storage.Event
+	listErr    error
 }
 
 func (m *mockApplication) CreateEvent(
@@ -55,6 +63,43 @@ func (m *mockApplication) DeleteEvent(
 	m.deleteCalled = true
 	m.deletedID = id
 	return m.deleteErr
+}
+
+func (m *mockApplication) recordList(
+	method string,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	m.listMethod = method
+	m.listUserID = userID
+	m.listDate = date
+	m.listCalls++
+
+	return m.listResult, m.listErr
+}
+
+func (m *mockApplication) ListEventsForDay(
+	_ context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	return m.recordList("day", userID, date)
+}
+
+func (m *mockApplication) ListEventsForWeek(
+	_ context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	return m.recordList("week", userID, date)
+}
+
+func (m *mockApplication) ListEventsForMonth(
+	_ context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	return m.recordList("month", userID, date)
 }
 
 func TestCreateEventHandler(t *testing.T) {
@@ -381,6 +426,161 @@ func TestDeleteEventHandler(t *testing.T) {
 			if tt.wantStatus == http.StatusNoContent {
 				require.Empty(t, rec.Body.String())
 			}
+		})
+	}
+}
+
+func TestListEventsHandler(t *testing.T) {
+	eventID := uuid.MustParse(
+		"a60baf46-3f79-4f0e-9d33-4a57c4b1a890",
+	)
+
+	event := storage.Event{
+		ID:           eventID,
+		UserID:       42,
+		Title:        "Созвон",
+		Description:  "Обсуждение проекта",
+		StartsAt:     time.Date(2026, 11, 9, 14, 0, 0, 0, time.UTC),
+		EndsAt:       time.Date(2026, 11, 9, 15, 0, 0, 0, time.UTC),
+		NotifyBefore: 15 * time.Minute,
+	}
+
+	const expectedJSON = `{
+		"events": [{
+			"id": "a60baf46-3f79-4f0e-9d33-4a57c4b1a890",
+			"userId": 42,
+			"title": "Созвон",
+			"description": "Обсуждение проекта",
+			"startsAt": "2026-11-09T14:00:00Z",
+			"endsAt": "2026-11-09T15:00:00Z",
+			"notifyBeforeSeconds": 900
+		}]
+	}`
+
+	tests := []struct {
+		name     string
+		path     string
+		method   string
+		events   []storage.Event
+		wantJSON string
+	}{
+		{
+			name:     "day",
+			path:     "/events/day?userId=42&date=2026-11-09",
+			method:   "day",
+			events:   []storage.Event{event},
+			wantJSON: expectedJSON,
+		},
+		{
+			name:     "week",
+			path:     "/events/week?userId=42&date=2026-11-09",
+			method:   "week",
+			events:   []storage.Event{event},
+			wantJSON: expectedJSON,
+		},
+		{
+			name:     "month",
+			path:     "/events/month?userId=42&date=2026-11-09",
+			method:   "month",
+			events:   []storage.Event{event},
+			wantJSON: expectedJSON,
+		},
+		{
+			name:     "empty list",
+			path:     "/events/day?userId=42&date=2026-11-09",
+			method:   "day",
+			wantJSON: `{"events":[]}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &mockApplication{
+				listResult: tt.events,
+			}
+
+			handler := newHandler(mockLogger{}, app)
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusOK, rec.Code)
+			require.Equal(
+				t,
+				"application/json",
+				rec.Header().Get("Content-Type"),
+			)
+			require.JSONEq(t, tt.wantJSON, rec.Body.String())
+
+			require.Equal(t, 1, app.listCalls)
+			require.Equal(t, tt.method, app.listMethod)
+			require.Equal(t, int64(42), app.listUserID)
+
+			expectedDate := time.Date(
+				2026, 11, 9, 0, 0, 0, 0, time.UTC,
+			)
+			require.True(t, expectedDate.Equal(app.listDate))
+		})
+	}
+}
+
+func TestListEventsHandlerInvalidParams(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+	}{
+		{
+			name: "missing user ID",
+			path: "/events/day?date=2026-11-09",
+		},
+		{
+			name: "invalid user ID",
+			path: "/events/day?userId=abc&date=2026-11-09",
+		},
+		{
+			name: "negative user ID",
+			path: "/events/day?userId=-1&date=2026-11-09",
+		},
+		{
+			name: "zero user ID",
+			path: "/events/day?userId=0&date=2026-11-09",
+		},
+		{
+			name: "user ID overflow",
+			path: "/events/day?userId=9223372036854775808&date=2026-11-09",
+		},
+		{
+			name: "missing date",
+			path: "/events/day?userId=42",
+		},
+		{
+			name: "invalid date format",
+			path: "/events/day?userId=42&date=09-11-2026",
+		},
+		{
+			name: "invalid calendar date",
+			path: "/events/day?userId=42&date=2026-02-30",
+		},
+		{
+			name: "empty date",
+			path: "/events/day?userId=42&date=",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &mockApplication{}
+			handler := newHandler(mockLogger{}, app)
+
+			req := httptest.NewRequest(http.MethodGet, tt.path, nil)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			require.Equal(t, http.StatusBadRequest, rec.Code)
+			require.Zero(t, app.listCalls)
 		})
 	}
 }

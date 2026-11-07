@@ -22,6 +22,9 @@ type Application interface {
 	CreateEvent(ctx context.Context, event storage.Event) error
 	UpdateEvent(ctx context.Context, event storage.Event) error
 	DeleteEvent(ctx context.Context, id uuid.UUID) error
+	ListEventsForDay(ctx context.Context, userID int64, date time.Time) ([]storage.Event, error)
+	ListEventsForWeek(ctx context.Context, userID int64, date time.Time) ([]storage.Event, error)
+	ListEventsForMonth(ctx context.Context, userID int64, date time.Time) ([]storage.Event, error)
 }
 type Server struct {
 	server *http.Server
@@ -58,7 +61,20 @@ func newHandler(logger Logger, app Application) http.Handler {
 	mux.Handle("POST /events", createEventHandler(app))
 	mux.Handle("PUT /events/{id}", updateEventHandler(app))
 	mux.Handle("DELETE /events/{id}", deleteEventHandler(app))
+	mux.Handle(
+		"GET /events/day",
+		listEventsHandler(app.ListEventsForDay),
+	)
 
+	mux.Handle(
+		"GET /events/week",
+		listEventsHandler(app.ListEventsForWeek),
+	)
+
+	mux.Handle(
+		"GET /events/month",
+		listEventsHandler(app.ListEventsForMonth),
+	)
 	return loggingMiddleware(logger, mux)
 }
 

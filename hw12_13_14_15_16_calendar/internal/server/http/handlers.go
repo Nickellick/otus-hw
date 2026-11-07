@@ -1,11 +1,13 @@
 package internalhttp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
 	"math"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
@@ -121,6 +123,75 @@ func deleteEventHandler(app Application) http.HandlerFunc {
 		}
 
 		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
+type listEventsFunc func(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error)
+
+type eventResponse struct {
+	ID                  uuid.UUID `json:"id"`
+	UserID              int64     `json:"userId"`
+	Title               string    `json:"title"`
+	Description         string    `json:"description"`
+	StartsAt            time.Time `json:"startsAt"`
+	EndsAt              time.Time `json:"endsAt"`
+	NotifyBeforeSeconds int64     `json:"notifyBeforeSeconds"`
+}
+
+type listEventsResponse struct {
+	Events []eventResponse `json:"events"`
+}
+
+func listEventsHandler(list listEventsFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		userID, err := strconv.ParseInt(
+			r.URL.Query().Get("userId"), 10, 64,
+		)
+		if err != nil || userID <= 0 {
+			http.Error(w, "invalid userId", http.StatusBadRequest)
+			return
+		}
+
+		date, err := time.Parse(
+			time.DateOnly,
+			r.URL.Query().Get("date"),
+		)
+		if err != nil {
+			http.Error(w, "invalid date", http.StatusBadRequest)
+			return
+		}
+
+		events, err := list(r.Context(), userID, date)
+		if err != nil {
+			writeEventError(w, err)
+			return
+		}
+
+		response := listEventsResponse{
+			Events: make([]eventResponse, 0, len(events)),
+		}
+
+		for _, event := range events {
+			response.Events = append(response.Events, eventResponse{
+				ID:                  event.ID,
+				UserID:              event.UserID,
+				Title:               event.Title,
+				Description:         event.Description,
+				StartsAt:            event.StartsAt,
+				EndsAt:              event.EndsAt,
+				NotifyBeforeSeconds: int64(event.NotifyBefore / time.Second),
+			})
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+
+		if err := json.NewEncoder(w).Encode(response); err != nil {
+			return
+		}
 	}
 }
 
