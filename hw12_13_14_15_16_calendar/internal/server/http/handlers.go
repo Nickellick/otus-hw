@@ -80,7 +80,7 @@ func (req eventRequest) toEvent(id uuid.UUID) (storage.Event, error) {
 
 func updateEventHandler(app Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		id, err := uuid.Parse(r.PathValue("id"))
+		id, err := parseEventID(r)
 		if err != nil || id == uuid.Nil {
 			http.Error(w, "invalid event ID", http.StatusBadRequest)
 			return
@@ -107,6 +107,23 @@ func updateEventHandler(app Application) http.HandlerFunc {
 	}
 }
 
+func deleteEventHandler(app Application) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, err := parseEventID(r)
+		if err != nil {
+			http.Error(w, "invalid event ID", http.StatusBadRequest)
+			return
+		}
+
+		if err := app.DeleteEvent(r.Context(), id); err != nil {
+			writeEventError(w, err)
+			return
+		}
+
+		w.WriteHeader(http.StatusNoContent)
+	}
+}
+
 func decodeJSON(r *http.Request, dst any) error {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
@@ -124,6 +141,19 @@ func decodeJSON(r *http.Request, dst any) error {
 	}
 
 	return nil
+}
+
+func parseEventID(r *http.Request) (uuid.UUID, error) {
+	id, err := uuid.Parse(r.PathValue("id"))
+	if err != nil {
+		return uuid.Nil, err
+	}
+
+	if id == uuid.Nil {
+		return uuid.Nil, storage.ErrInvalidEvent
+	}
+
+	return id, nil
 }
 
 func writeEventError(w http.ResponseWriter, err error) {

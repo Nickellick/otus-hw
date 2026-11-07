@@ -24,6 +24,10 @@ type mockApplication struct {
 	updatedEvent storage.Event
 	updateCalled bool
 	updateErr    error
+
+	deletedID    uuid.UUID
+	deleteCalled bool
+	deleteErr    error
 }
 
 func (m *mockApplication) CreateEvent(
@@ -42,6 +46,15 @@ func (m *mockApplication) UpdateEvent(
 	m.updateCalled = true
 	m.updatedEvent = event
 	return m.updateErr
+}
+
+func (m *mockApplication) DeleteEvent(
+	_ context.Context,
+	id uuid.UUID,
+) error {
+	m.deleteCalled = true
+	m.deletedID = id
+	return m.deleteErr
 }
 
 func TestCreateEventHandler(t *testing.T) {
@@ -296,6 +309,78 @@ func TestUpdateEventHandlerErrors(t *testing.T) {
 
 			require.Equal(t, tt.wantStatus, rec.Code)
 			require.Equal(t, tt.wantCalled, app.updateCalled)
+		})
+	}
+}
+
+func TestDeleteEventHandler(t *testing.T) {
+	eventID := uuid.MustParse("a60baf46-3f79-4f0e-9d33-4a57c4b1a890")
+
+	tests := []struct {
+		name       string
+		id         string
+		deleteErr  error
+		wantStatus int
+		wantCalled bool
+	}{
+		{
+			name:       "success",
+			id:         eventID.String(),
+			wantStatus: http.StatusNoContent,
+			wantCalled: true,
+		},
+		{
+			name:       "invalid UUID",
+			id:         "invalid",
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "nil UUID",
+			id:         uuid.Nil.String(),
+			wantStatus: http.StatusBadRequest,
+		},
+		{
+			name:       "event not found",
+			id:         eventID.String(),
+			deleteErr:  storage.ErrEventNotFound,
+			wantStatus: http.StatusNotFound,
+			wantCalled: true,
+		},
+		{
+			name:       "unexpected error",
+			id:         eventID.String(),
+			deleteErr:  errors.New("database unavailable"),
+			wantStatus: http.StatusInternalServerError,
+			wantCalled: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			app := &mockApplication{
+				deleteErr: tt.deleteErr,
+			}
+			handler := newHandler(mockLogger{}, app)
+
+			req := httptest.NewRequest(
+				http.MethodDelete,
+				"/events/"+tt.id,
+				nil,
+			)
+			rec := httptest.NewRecorder()
+
+			handler.ServeHTTP(rec, req)
+
+			require.Equal(t, tt.wantStatus, rec.Code)
+			require.Equal(t, tt.wantCalled, app.deleteCalled)
+
+			if tt.wantCalled {
+				require.Equal(t, eventID, app.deletedID)
+			}
+
+			if tt.wantStatus == http.StatusNoContent {
+				require.Empty(t, rec.Body.String())
+			}
 		})
 	}
 }

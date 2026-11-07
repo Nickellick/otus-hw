@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
+	"github.com/google/uuid"
 )
 
 type Logger interface {
@@ -20,6 +21,7 @@ type Logger interface {
 type Application interface {
 	CreateEvent(ctx context.Context, event storage.Event) error
 	UpdateEvent(ctx context.Context, event storage.Event) error
+	DeleteEvent(ctx context.Context, id uuid.UUID) error
 }
 type Server struct {
 	server *http.Server
@@ -55,6 +57,7 @@ func newHandler(logger Logger, app Application) http.Handler {
 	})
 	mux.Handle("POST /events", createEventHandler(app))
 	mux.Handle("PUT /events/{id}", updateEventHandler(app))
+	mux.Handle("DELETE /events/{id}", deleteEventHandler(app))
 
 	return loggingMiddleware(logger, mux)
 }
