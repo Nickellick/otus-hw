@@ -81,7 +81,7 @@ func (req eventRequest) toEvent(id uuid.UUID) (storage.Event, error) {
 func updateEventHandler(app Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		id, err := parseEventID(r)
-		if err != nil || id == uuid.Nil {
+		if err != nil {
 			http.Error(w, "invalid event ID", http.StatusBadRequest)
 			return
 		}
