@@ -3,6 +3,7 @@ package internalhttp
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"time"
 
@@ -28,8 +29,17 @@ func createEventHandler(app Application) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req createEventRequest
 
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		decoder := json.NewDecoder(r.Body)
+		decoder.DisallowUnknownFields()
+
+		if err := decoder.Decode(&req); err != nil {
 			http.Error(w, "invalid JSON", http.StatusBadRequest)
+			return
+		}
+
+		var extra any
+		if err := decoder.Decode(&extra); err != io.EOF {
+			http.Error(w, "unexpected data after JSON", http.StatusBadRequest)
 			return
 		}
 
