@@ -45,6 +45,22 @@ func (s *Server) Serve(listener net.Listener) error {
 	return s.server.Serve(listener)
 }
 
-func (s *Server) Stop() {
-	s.server.GracefulStop()
+func (s *Server) Stop(ctx context.Context) error {
+	done := make(chan struct{})
+
+	go func() {
+		s.server.GracefulStop()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		return nil
+
+	case <-ctx.Done():
+		s.server.Stop()
+		<-done
+
+		return ctx.Err()
+	}
 }
