@@ -5,6 +5,10 @@ http:
   host: 127.0.0.1
   port: 8080
 
+grpc:
+  host: 127.0.0.1
+  port: 50051
+
 storage:
 #  type: memory # sql for postgres, memory for in-memory
   type: sql

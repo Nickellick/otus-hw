@@ -22,6 +22,11 @@ type HTTPConf struct {
 	Port int    `yaml:"port"`
 }
 
+type GRPCConf struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+}
+
 type StorageConf struct {
 	Type string `yaml:"type"`
 }
@@ -35,6 +40,7 @@ type PostgresConf struct {
 type Config struct {
 	Logger   LoggerConf   `yaml:"logger"`
 	HTTP     HTTPConf     `yaml:"http"`
+	GRPC     GRPCConf     `yaml:"grpc"`
 	Storage  StorageConf  `yaml:"storage"`
 	Postgres PostgresConf `yaml:"postgres"`
 }
