@@ -17,8 +17,8 @@ type Logger interface {
 }
 
 func runServers(
-	logger Logger,
 	ctx context.Context,
+	logger Logger,
 	httpServer *internalhttp.Server,
 	grpcServer *internalgrpc.Server,
 	cfg Config,

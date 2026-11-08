@@ -71,7 +71,7 @@ func run() error {
 
 	grpcServer := internalgrpc.NewServer(logg, calendar)
 
-	return runServers(logg, ctx, httpServer, grpcServer, *config)
+	return runServers(ctx, logg, httpServer, grpcServer, *config)
 }
 
 func createStorage(
