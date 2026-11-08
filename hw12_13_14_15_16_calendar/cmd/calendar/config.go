@@ -54,6 +54,10 @@ func NewConfig() Config {
 			Host: "127.0.0.1",
 			Port: 8080,
 		},
+		GRPC: GRPCConf{
+			Host: "127.0.0.1",
+			Port: 50051,
+		},
 		Storage: StorageConf{
 			Type: memoryStorage,
 		},
@@ -91,6 +95,10 @@ func LoadConfig(path string) (*Config, error) {
 
 	if cfg.HTTP.Port <= 0 || cfg.HTTP.Port > 65535 {
 		return nil, fmt.Errorf("invalid HTTP port: %d", cfg.HTTP.Port)
+	}
+
+	if cfg.GRPC.Port <= 0 || cfg.GRPC.Port > 65535 {
+		return nil, fmt.Errorf("invalid gRPC port: %d", cfg.GRPC.Port)
 	}
 
 	if cfg.Postgres.MaxOpenConns < 0 || cfg.Postgres.MaxIdleConns < 0 {
