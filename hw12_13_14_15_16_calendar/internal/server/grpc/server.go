@@ -28,13 +28,16 @@ type Server struct {
 	app    Application
 }
 
-func NewServer(app Application) *Server {
+func NewServer(logger Logger, app Application) *Server {
 	s := &Server{
-		server: grpc.NewServer(),
-		app:    app,
+		server: grpc.NewServer(
+			grpc.UnaryInterceptor(loggingInterceptor(logger)),
+		),
+		app: app,
 	}
 
 	pb.RegisterCalendarServiceServer(s.server, s)
+
 	return s
 }
 
