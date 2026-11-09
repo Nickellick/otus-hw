@@ -446,3 +446,59 @@ func TestListEventsErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestEventMutationsInvalidUserID(t *testing.T) {
+	tests := []struct {
+		name   string
+		userID int64
+	}{
+		{
+			name:   "zero user ID",
+			userID: 0,
+		},
+		{
+			name:   "negative user ID",
+			userID: -42,
+		},
+	}
+
+	start := time.Date(2026, 11, 9, 14, 0, 0, 0, time.UTC)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			event := &pb.Event{
+				Id:       uuid.NewString(),
+				UserId:   tt.userID,
+				Title:    "Test event",
+				StartsAt: timestamppb.New(start),
+				EndsAt:   timestamppb.New(start.Add(time.Hour)),
+			}
+
+			t.Run("create", func(t *testing.T) {
+				app := &mockApplication{}
+				server := &Server{app: app}
+
+				_, err := server.CreateEvent(
+					context.Background(),
+					&pb.CreateEventRequest{Event: event},
+				)
+
+				require.Equal(t, codes.InvalidArgument, status.Code(err))
+				require.False(t, app.createCalled)
+			})
+
+			t.Run("update", func(t *testing.T) {
+				app := &mockApplication{}
+				server := &Server{app: app}
+
+				_, err := server.UpdateEvent(
+					context.Background(),
+					&pb.UpdateEventRequest{Event: event},
+				)
+
+				require.Equal(t, codes.InvalidArgument, status.Code(err))
+				require.False(t, app.updateCalled)
+			})
+		})
+	}
+}

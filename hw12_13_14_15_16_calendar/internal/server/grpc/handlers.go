@@ -69,6 +69,10 @@ func eventFromProto(event *pb.Event) (storage.Event, error) {
 		result.NotifyBefore = notifyBefore.AsDuration()
 	}
 
+	if err := result.Validate(); err != nil {
+		return storage.Event{}, toGRPCError(err)
+	}
+
 	return result, nil
 }
 

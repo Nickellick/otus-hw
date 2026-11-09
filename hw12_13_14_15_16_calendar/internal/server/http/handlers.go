@@ -69,7 +69,7 @@ func (req eventRequest) toEvent(id uuid.UUID) (storage.Event, error) {
 		return storage.Event{}, storage.ErrInvalidEvent
 	}
 
-	return storage.Event{
+	result := storage.Event{
 		ID:           id,
 		UserID:       req.UserID,
 		Title:        req.Title,
@@ -77,7 +77,11 @@ func (req eventRequest) toEvent(id uuid.UUID) (storage.Event, error) {
 		StartsAt:     req.StartsAt,
 		EndsAt:       req.EndsAt,
 		NotifyBefore: time.Duration(req.NotifyBeforeSeconds) * time.Second,
-	}, nil
+	}
+	if err := result.Validate(); err != nil {
+		return storage.Event{}, err
+	}
+	return result, nil
 }
 
 func updateEventHandler(app Application) http.HandlerFunc {

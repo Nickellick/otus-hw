@@ -584,3 +584,70 @@ func TestListEventsHandlerInvalidParams(t *testing.T) {
 		})
 	}
 }
+
+func TestEventMutationsInvalidUserID(t *testing.T) {
+	const eventID = "a60baf46-3f79-4f0e-9d33-4a57c4b1a890"
+
+	tests := []struct {
+		name   string
+		userID int64
+	}{
+		{
+			name:   "zero user ID",
+			userID: 0,
+		},
+		{
+			name:   "negative user ID",
+			userID: -42,
+		},
+	}
+
+	methods := []struct {
+		name   string
+		method string
+		path   string
+	}{
+		{
+			name:   "create",
+			method: http.MethodPost,
+			path:   "/events",
+		},
+		{
+			name:   "update",
+			method: http.MethodPut,
+			path:   "/events/" + eventID,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, method := range methods {
+				t.Run(method.name, func(t *testing.T) {
+					body := fmt.Sprintf(`{
+						"id": %q,
+						"userId": %d,
+						"title": "Test event",
+						"startsAt": "2026-11-09T14:00:00Z",
+						"endsAt": "2026-11-09T15:00:00Z"
+					}`, eventID, tt.userID)
+
+					app := &mockApplication{}
+					handler := newHandler(mockLogger{}, app)
+
+					req := httptest.NewRequest(
+						method.method,
+						method.path,
+						strings.NewReader(body),
+					)
+					rec := httptest.NewRecorder()
+
+					handler.ServeHTTP(rec, req)
+
+					require.Equal(t, http.StatusBadRequest, rec.Code)
+					require.False(t, app.createCalled)
+					require.False(t, app.updateCalled)
+				})
+			}
+		})
+	}
+}
