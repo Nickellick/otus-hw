@@ -1,0 +1,5 @@
+logger:
+  level: info
+
+rabbitmq:
+  url: amqp://rabbit:password@127.0.0.1:5672/

@@ -9,6 +9,11 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+const (
+	inMemoryType = "memory"
+	sqlType      = "sql"
+)
+
 type Duration struct {
 	time.Duration
 }
@@ -63,7 +68,7 @@ type Config struct {
 func NewConfig() Config {
 	return Config{
 		Logger:  LoggerConf{Level: "info"},
-		Storage: StorageConf{Type: "sql"},
+		Storage: StorageConf{Type: sqlType},
 		Postgres: PostgresConf{
 			MaxOpenConns: 10,
 			MaxIdleConns: 5,
@@ -91,8 +96,8 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	switch cfg.Storage.Type {
-	case "memory":
-	case "sql":
+	case inMemoryType:
+	case sqlType:
 		if cfg.Postgres.DSN == "" {
 			return nil, fmt.Errorf("postgres DSN is required")
 		}
@@ -122,7 +127,7 @@ func LoadConfig(path string) (*Config, error) {
 		)
 	}
 
-	if cfg.Storage.Type == "sql" &&
+	if cfg.Storage.Type == sqlType &&
 		cfg.Postgres.MaxOpenConns > 0 &&
 		cfg.Postgres.MaxIdleConns > cfg.Postgres.MaxOpenConns {
 		return nil, fmt.Errorf(

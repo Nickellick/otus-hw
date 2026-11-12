@@ -1,4 +1,6 @@
 BIN := "./bin/calendar"
+SCHEDULER_BIN := "./bin/calendar_scheduler"
+SENDER_BIN := "./bin/calendar_sender"
 DOCKER_IMG="calendar:develop"
 
 GOLANGCI_LINT_VERSION := v1.63.4
@@ -29,6 +31,27 @@ PROTO_BIN := $(CURDIR)/bin
 
 COMPOSE := docker compose -f deployments/docker-compose.yaml
 
+
+build: build-scheduler build-sender
+	go build -v -o $(BIN) -ldflags "$(LDFLAGS)" ./cmd/calendar
+
+build-scheduler:
+	go build -v -o $(SCHEDULER_BIN) \
+		-ldflags "$(LDFLAGS)" \
+		./cmd/calendar_scheduler
+
+build-sender:
+	go build -v -o $(SENDER_BIN) \
+		-ldflags "$(LDFLAGS)" \
+		./cmd/calendar_sender
+
+run-scheduler: build-scheduler
+	$(SCHEDULER_BIN) -config ./configs/scheduler.yaml
+
+run-sender: build-sender
+	$(SENDER_BIN) -config ./configs/sender.yaml
+
+
 run-postgres:
 	docker run -d --name $(POSTGRES_CONTAINER) \
 	-e POSTGRES_USER=$(POSTGRES_USER) \
@@ -45,9 +68,6 @@ run-rabbit:
 	-e RABBITMQ_DEFAULT_USER=$(RABBIT_USER) \
 	-e RABBITMQ_DEFAULT_PASS=$(RABBIT_PASSWORD) \
 	rabbitmq:management
-
-build:
-	go build -v -o $(BIN) -ldflags "$(LDFLAGS)" ./cmd/calendar
 
 run: build
 	$(BIN) -config ./configs/config.yaml
@@ -128,4 +148,4 @@ generate:
 	@mkdir -p pkg/calendarpb
 	PATH="$(PROTO_BIN):$$PATH" go generate ./cmd/calendar
 
-.PHONY: build run build-scheduler run-scheduler build-img run-img version test lint rabbit-up run-rabbit run-postgres rabbit-down rabbit-logs infra-up infra-down db-up db-down db-logs db-shell install-proto-tools generate
+.PHONY: build run build-scheduler run-scheduler build-sender run-sender build-img run-img version test lint rabbit-up run-rabbit run-postgres rabbit-down rabbit-logs infra-up infra-down db-up db-down db-logs db-shell install-proto-tools generate
