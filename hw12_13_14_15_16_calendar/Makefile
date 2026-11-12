@@ -20,6 +20,7 @@ RABBIT_PASSWORD ?= password
 RABBIT_PORT ?= 5672
 RABBIT_PORT_UI ?= 15672
 RABBIT_CONTAINER := rabbitmq
+RABBIT_DSN := amqp://$(RABBIT_USER):$(RABBIT_PASSWORD)@127.0.0.1:$(RABBIT_PORT)/
 
 #Protoc
 PROTOC_GEN_GO_VERSION := v1.36.6
@@ -78,7 +79,7 @@ db-up:
 	$(COMPOSE) up -d --wait postgres
 
 db-down:
-	$(COMPOSE) down
+	$(COMPOSE) stop postgres
 
 db-logs:
 	$(COMPOSE) logs -f postgres
@@ -86,6 +87,21 @@ db-logs:
 db-shell:
 	$(COMPOSE) exec postgres \
 		psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+
+rabbit-up:
+	$(COMPOSE) up -d --wait rabbitmq
+
+rabbit-down:
+	$(COMPOSE) stop rabbitmq
+
+rabbit-logs:
+	$(COMPOSE) logs -f rabbitmq
+
+infra-up: db-up rabbit-up
+
+infra-down:
+	$(COMPOSE) down
+
 migrate:
 	goose -dir migrations postgres "$(POSTGRES_DSN)" up
 
@@ -104,4 +120,4 @@ generate:
 	@mkdir -p pkg/calendarpb
 	PATH="$(PROTO_BIN):$$PATH" go generate ./cmd/calendar
 
-.PHONY: build run build-img run-img version test lint db-up db-down db-logs db-shell install-proto-tools generate
+.PHONY: build run build-img run-img version test lint rabbit-up run-rabbit run-postgres rabbit-down rabbit-logs infra-up infra-down db-up db-down db-logs db-shell install-proto-tools generate
