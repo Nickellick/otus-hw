@@ -52,6 +52,14 @@ build:
 run: build
 	$(BIN) -config ./configs/config.yaml
 
+build-scheduler:
+	go build -v -o ./bin/calendar_scheduler \
+		-ldflags "$(LDFLAGS)" \
+		./cmd/calendar_scheduler
+
+run-scheduler: build-scheduler
+	./bin/calendar_scheduler -config ./configs/scheduler.yaml
+
 build-img:
 	docker build \
 		--build-arg=LDFLAGS="$(LDFLAGS)" \
@@ -120,4 +128,4 @@ generate:
 	@mkdir -p pkg/calendarpb
 	PATH="$(PROTO_BIN):$$PATH" go generate ./cmd/calendar
 
-.PHONY: build run build-img run-img version test lint rabbit-up run-rabbit run-postgres rabbit-down rabbit-logs infra-up infra-down db-up db-down db-logs db-shell install-proto-tools generate
+.PHONY: build run build-scheduler run-scheduler build-img run-img version test lint rabbit-up run-rabbit run-postgres rabbit-down rabbit-logs infra-up infra-down db-up db-down db-logs db-shell install-proto-tools generate

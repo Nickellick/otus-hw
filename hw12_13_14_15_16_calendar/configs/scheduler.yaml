@@ -1,0 +1,17 @@
+logger:
+  level: info
+
+storage:
+  type: sql
+
+postgres:
+  dsn: postgres://postgres:password@127.0.0.1:5435/backend?sslmode=disable
+  maxOpenConns: 10
+  maxIdleConns: 5
+
+rabbitmq:
+  url: amqp://rabbit:password@127.0.0.1:5672/
+
+scheduler:
+  interval: 5s
+  batchSize: 100

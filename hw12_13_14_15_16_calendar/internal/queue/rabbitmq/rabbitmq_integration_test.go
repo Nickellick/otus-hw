@@ -200,3 +200,61 @@ func TestConsumerStopsDuringReconnect(t *testing.T) {
 		t.Fatal("consumer did not stop after context cancellation")
 	}
 }
+
+func TestPublisherReconnect(t *testing.T) {
+	container, url := setupTestRabbitMQContainer(t)
+
+	ctx, cancel := context.WithTimeout(
+		context.Background(),
+		90*time.Second,
+	)
+	defer cancel()
+
+	publisher, err := New(url)
+	require.NoError(t, err)
+	defer publisher.Close()
+
+	first := []byte(`{"eventId":"first"}`)
+	require.NoError(t, publisher.Publish(ctx, first))
+
+	rabbitMQAppCommand(ctx, t, container, "stop_app")
+	rabbitMQAppCommand(ctx, t, container, "start_app")
+
+	require.Eventually(t, func() bool {
+		client, err := New(url)
+		if err != nil {
+			return false
+		}
+
+		_ = client.Close()
+		return true
+	}, 30*time.Second, 250*time.Millisecond)
+
+	second := []byte(`{"eventId":"second"}`)
+	require.NoError(t, publisher.Publish(ctx, second))
+
+	consumer, err := New(url)
+	require.NoError(t, err)
+	defer consumer.Close()
+
+	deliveries, err := consumer.Consume(ctx)
+	require.NoError(t, err)
+
+	found := false
+
+	for !found {
+		select {
+		case message, ok := <-deliveries:
+			require.True(t, ok)
+
+			if string(message.Body()) == string(second) {
+				found = true
+			}
+
+			require.NoError(t, message.Ack())
+
+		case <-ctx.Done():
+			t.Fatal("reconnected publisher message not received")
+		}
+	}
+}

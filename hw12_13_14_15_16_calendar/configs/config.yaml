@@ -11,7 +11,7 @@ grpc:
 
 storage:
 #  type: memory # sql for postgres, memory for in-memory
-  type: memory
+  type: sql
 
 postgres:
   dsn: postgres://postgres:password@127.0.0.1:5435/backend?sslmode=disable
