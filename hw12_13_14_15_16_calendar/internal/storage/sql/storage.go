@@ -85,7 +85,15 @@ func (s *Storage) Update(ctx context.Context, event storage.Event) error {
 			description = $4,
 			starts_at = $5,
 			ends_at = $6,
-			notify_before_ns = $7
+			notify_before_ns = $7,
+			notification_sent_at = CASE
+				WHEN user_id IS DISTINCT FROM $2
+				  OR title IS DISTINCT FROM $3
+				  OR starts_at IS DISTINCT FROM $5
+				  OR notify_before_ns IS DISTINCT FROM $7
+				THEN NULL
+				ELSE notification_sent_at
+			END
 		WHERE id = $1
 	`
 
@@ -200,6 +208,126 @@ func (s *Storage) List(
 	}
 
 	return events, nil
+}
+
+func (s *Storage) DueEvents(
+	ctx context.Context,
+	now time.Time,
+	limit int,
+) ([]storage.Event, error) {
+	const query = `
+		SELECT
+			id,
+			user_id,
+			title,
+			description,
+			starts_at,
+			ends_at,
+			notify_before_ns
+		FROM events
+		WHERE notify_before_ns > 0
+		  AND notification_sent_at IS NULL
+		  AND starts_at - (
+		      (notify_before_ns / 1000) * INTERVAL '1 microsecond'
+		  ) <= $1
+		  AND starts_at > $1
+		ORDER BY starts_at, id
+		LIMIT $2
+	`
+
+	if limit <= 0 {
+		return nil, fmt.Errorf("limit must be positive")
+	}
+
+	rows, err := s.db.QueryContext(ctx, query, now, limit)
+	if err != nil {
+		return nil, fmt.Errorf("query due events: %w", err)
+	}
+	defer rows.Close()
+
+	events := make([]storage.Event, 0)
+
+	for rows.Next() {
+		var event storage.Event
+		var notifyBeforeNS int64
+
+		if err := rows.Scan(
+			&event.ID,
+			&event.UserID,
+			&event.Title,
+			&event.Description,
+			&event.StartsAt,
+			&event.EndsAt,
+			&notifyBeforeNS,
+		); err != nil {
+			return nil, fmt.Errorf("scan due event: %w", err)
+		}
+
+		event.NotifyBefore = time.Duration(notifyBeforeNS)
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate due events: %w", err)
+	}
+
+	return events, nil
+}
+
+func (s *Storage) MarkNotified(
+	ctx context.Context,
+	id uuid.UUID,
+	startsAt time.Time,
+	notifyBefore time.Duration,
+) (bool, error) {
+	const query = `
+		UPDATE events
+		SET notification_sent_at = NOW()
+		WHERE id = $1
+		  AND starts_at = $2
+		  AND notify_before_ns = $3
+		  AND notification_sent_at IS NULL
+	`
+
+	result, err := s.db.ExecContext(
+		ctx,
+		query,
+		id,
+		startsAt,
+		int64(notifyBefore),
+	)
+	if err != nil {
+		return false, fmt.Errorf("mark event notified: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("rows affected: %w", err)
+	}
+
+	return affected == 1, nil
+}
+
+func (s *Storage) DeleteOldEvents(
+	ctx context.Context,
+	before time.Time,
+) (int64, error) {
+	const query = `
+		DELETE FROM events
+		WHERE ends_at < $1
+	`
+
+	result, err := s.db.ExecContext(ctx, query, before)
+	if err != nil {
+		return 0, fmt.Errorf("delete old events: %w", err)
+	}
+
+	affected, err := result.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("rows affected: %w", err)
+	}
+
+	return affected, nil
 }
 
 func mapError(err error) error {

@@ -1,4 +1,6 @@
 BIN := "./bin/calendar"
+SCHEDULER_BIN := "./bin/calendar_scheduler"
+SENDER_BIN := "./bin/calendar_sender"
 DOCKER_IMG="calendar:develop"
 
 GOLANGCI_LINT_VERSION := v1.63.4
@@ -20,6 +22,7 @@ RABBIT_PASSWORD ?= password
 RABBIT_PORT ?= 5672
 RABBIT_PORT_UI ?= 15672
 RABBIT_CONTAINER := rabbitmq
+RABBIT_DSN := amqp://$(RABBIT_USER):$(RABBIT_PASSWORD)@127.0.0.1:$(RABBIT_PORT)/
 
 #Protoc
 PROTOC_GEN_GO_VERSION := v1.36.6
@@ -27,6 +30,27 @@ PROTOC_GEN_GO_GRPC_VERSION := v1.5.1
 PROTO_BIN := $(CURDIR)/bin
 
 COMPOSE := docker compose -f deployments/docker-compose.yaml
+
+
+build: build-scheduler build-sender
+	go build -v -o $(BIN) -ldflags "$(LDFLAGS)" ./cmd/calendar
+
+build-scheduler:
+	go build -v -o $(SCHEDULER_BIN) \
+		-ldflags "$(LDFLAGS)" \
+		./cmd/calendar_scheduler
+
+build-sender:
+	go build -v -o $(SENDER_BIN) \
+		-ldflags "$(LDFLAGS)" \
+		./cmd/calendar_sender
+
+run-scheduler: build-scheduler
+	$(SCHEDULER_BIN) -config ./configs/scheduler.yaml
+
+run-sender: build-sender
+	$(SENDER_BIN) -config ./configs/sender.yaml
+
 
 run-postgres:
 	docker run -d --name $(POSTGRES_CONTAINER) \
@@ -45,11 +69,16 @@ run-rabbit:
 	-e RABBITMQ_DEFAULT_PASS=$(RABBIT_PASSWORD) \
 	rabbitmq:management
 
-build:
-	go build -v -o $(BIN) -ldflags "$(LDFLAGS)" ./cmd/calendar
-
 run: build
 	$(BIN) -config ./configs/config.yaml
+
+build-scheduler:
+	go build -v -o ./bin/calendar_scheduler \
+		-ldflags "$(LDFLAGS)" \
+		./cmd/calendar_scheduler
+
+run-scheduler: build-scheduler
+	./bin/calendar_scheduler -config ./configs/scheduler.yaml
 
 build-img:
 	docker build \
@@ -78,7 +107,7 @@ db-up:
 	$(COMPOSE) up -d --wait postgres
 
 db-down:
-	$(COMPOSE) down
+	$(COMPOSE) stop postgres
 
 db-logs:
 	$(COMPOSE) logs -f postgres
@@ -86,6 +115,21 @@ db-logs:
 db-shell:
 	$(COMPOSE) exec postgres \
 		psql -U $(POSTGRES_USER) -d $(POSTGRES_DB)
+
+rabbit-up:
+	$(COMPOSE) up -d --wait rabbitmq
+
+rabbit-down:
+	$(COMPOSE) stop rabbitmq
+
+rabbit-logs:
+	$(COMPOSE) logs -f rabbitmq
+
+infra-up: db-up rabbit-up
+
+infra-down:
+	$(COMPOSE) down
+
 migrate:
 	goose -dir migrations postgres "$(POSTGRES_DSN)" up
 
@@ -104,4 +148,4 @@ generate:
 	@mkdir -p pkg/calendarpb
 	PATH="$(PROTO_BIN):$$PATH" go generate ./cmd/calendar
 
-.PHONY: build run build-img run-img version test lint db-up db-down db-logs db-shell install-proto-tools generate
+.PHONY: build run build-scheduler run-scheduler build-sender run-sender build-img run-img version test lint rabbit-up run-rabbit run-postgres rabbit-down rabbit-logs infra-up infra-down db-up db-down db-logs db-shell install-proto-tools generate
