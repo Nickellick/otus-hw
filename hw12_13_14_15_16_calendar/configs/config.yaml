@@ -5,11 +5,15 @@ http:
   host: 127.0.0.1
   port: 8080
 
+grpc:
+  host: 127.0.0.1
+  port: 50051
+
 storage:
 #  type: memory # sql for postgres, memory for in-memory
-  type: sql
+  type: memory
 
 postgres:
   dsn: postgres://postgres:password@127.0.0.1:5435/backend?sslmode=disable
-  max_open_conns: 10
-  max_idle_conns: 5
+  maxOpenConns: 10
+  maxIdleConns: 5

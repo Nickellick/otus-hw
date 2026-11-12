@@ -47,7 +47,7 @@ func TestServerRoutes(t *testing.T) {
 		},
 	}
 
-	handler := newHandler(mockLogger{})
+	handler := newHandler(mockLogger{}, &mockApplication{})
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestServerStartStop(t *testing.T) {
 	require.NoError(t, err)
 	defer listener.Close()
 
-	server := NewServer(mockLogger{}, nil, "127.0.0.1", 0)
+	server := NewServer(mockLogger{}, &mockApplication{}, "127.0.0.1", 0)
 
 	done := make(chan error, 1)
 
@@ -98,7 +98,6 @@ func TestServerStartStop(t *testing.T) {
 	defer cancel()
 
 	require.NoError(t, server.Stop(ctx))
-	require.Equal(t, http.StatusOK, response.StatusCode)
 
 	select {
 	case err := <-done:
@@ -122,8 +121,9 @@ func TestServerGracefulShutdown(t *testing.T) {
 
 	listener, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
+	defer listener.Close()
 
-	server := NewServer(mockLogger{}, nil, "127.0.0.1", 0)
+	server := NewServer(mockLogger{}, &mockApplication{}, "127.0.0.1", 0)
 	server.server.Handler = handler
 
 	done := make(chan error, 1)

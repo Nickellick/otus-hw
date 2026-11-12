@@ -1,7 +1,58 @@
+
 syntax = "proto3";
 
 package event;
 
+option go_package = "github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/pkg/calendarpb;calendarpb";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/duration.proto";
+
 message Event {
-    // TODO
+  string id = 1;
+  int64 user_id = 2;
+  string title = 3;
+  string description = 4;
+  google.protobuf.Timestamp starts_at = 5;
+  google.protobuf.Timestamp ends_at = 6;
+  google.protobuf.Duration notify_before = 7;
+}
+
+message CreateEventRequest {
+  Event event = 1;
+}
+
+message CreateEventResponse {
+  string id = 1;
+}
+
+message UpdateEventRequest {
+  Event event = 1;
+}
+
+message UpdateEventResponse {}
+
+message DeleteEventRequest {
+  string id = 1;
+}
+
+message DeleteEventResponse {}
+
+message ListEventsRequest {
+  int64 user_id = 1;
+  google.protobuf.Timestamp date = 2;
+}
+
+message ListEventsResponse {
+  repeated Event events = 1;
+}
+
+service CalendarService {
+  rpc CreateEvent(CreateEventRequest) returns (CreateEventResponse);
+  rpc UpdateEvent(UpdateEventRequest) returns (UpdateEventResponse);
+  rpc DeleteEvent(DeleteEventRequest) returns (DeleteEventResponse);
+
+  rpc ListEventsForDay(ListEventsRequest) returns (ListEventsResponse);
+  rpc ListEventsForWeek(ListEventsRequest) returns (ListEventsResponse);
+  rpc ListEventsForMonth(ListEventsRequest) returns (ListEventsResponse);
 }

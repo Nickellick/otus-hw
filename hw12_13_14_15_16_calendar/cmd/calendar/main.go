@@ -2,17 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/app"
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/logger"
+	internalgrpc "github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/server/grpc"
 	internalhttp "github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/server/http"
 	memorystorage "github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage/memory"
 	sqlstorage "github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage/sql"
@@ -64,39 +62,16 @@ func run() error {
 
 	calendar := app.New(logg, storage)
 
-	server := internalhttp.NewServer(
+	httpServer := internalhttp.NewServer(
 		logg,
 		calendar,
 		config.HTTP.Host,
 		config.HTTP.Port,
 	)
 
-	shutdownDone := make(chan error, 1)
+	grpcServer := internalgrpc.NewServer(logg, calendar)
 
-	go func() {
-		defer close(shutdownDone)
-
-		<-ctx.Done()
-
-		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), time.Second*3)
-		defer shutdownCancel()
-
-		shutdownDone <- server.Stop(shutdownCtx)
-	}()
-
-	logg.Info("calendar is running...")
-
-	err = server.Start(ctx)
-
-	cancel()
-	<-shutdownDone
-
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		logg.Error("failed to start http server: " + err.Error())
-		return err
-	}
-
-	return nil
+	return runServers(ctx, logg, httpServer, grpcServer, *config)
 }
 
 func createStorage(

@@ -22,6 +22,11 @@ type HTTPConf struct {
 	Port int    `yaml:"port"`
 }
 
+type GRPCConf struct {
+	Host string `yaml:"host"`
+	Port int    `yaml:"port"`
+}
+
 type StorageConf struct {
 	Type string `yaml:"type"`
 }
@@ -35,6 +40,7 @@ type PostgresConf struct {
 type Config struct {
 	Logger   LoggerConf   `yaml:"logger"`
 	HTTP     HTTPConf     `yaml:"http"`
+	GRPC     GRPCConf     `yaml:"grpc"`
 	Storage  StorageConf  `yaml:"storage"`
 	Postgres PostgresConf `yaml:"postgres"`
 }
@@ -47,6 +53,10 @@ func NewConfig() Config {
 		HTTP: HTTPConf{
 			Host: "127.0.0.1",
 			Port: 8080,
+		},
+		GRPC: GRPCConf{
+			Host: "127.0.0.1",
+			Port: 50051,
 		},
 		Storage: StorageConf{
 			Type: memoryStorage,
@@ -85,6 +95,10 @@ func LoadConfig(path string) (*Config, error) {
 
 	if cfg.HTTP.Port <= 0 || cfg.HTTP.Port > 65535 {
 		return nil, fmt.Errorf("invalid HTTP port: %d", cfg.HTTP.Port)
+	}
+
+	if cfg.GRPC.Port <= 0 || cfg.GRPC.Port > 65535 {
+		return nil, fmt.Errorf("invalid gRPC port: %d", cfg.GRPC.Port)
 	}
 
 	if cfg.Postgres.MaxOpenConns < 0 || cfg.Postgres.MaxIdleConns < 0 {

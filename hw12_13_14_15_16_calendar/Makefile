@@ -21,6 +21,11 @@ RABBIT_PORT ?= 5672
 RABBIT_PORT_UI ?= 15672
 RABBIT_CONTAINER := rabbitmq
 
+#Protoc
+PROTOC_GEN_GO_VERSION := v1.36.6
+PROTOC_GEN_GO_GRPC_VERSION := v1.5.1
+PROTO_BIN := $(CURDIR)/bin
+
 COMPOSE := docker compose -f deployments/docker-compose.yaml
 
 run-postgres:
@@ -90,4 +95,13 @@ migrate-down:
 migrate-status:
 	goose -dir migrations postgres "$(POSTGRES_DSN)" status
 
-.PHONY: build run build-img run-img version test lint db-up db-down db-logs db-shell
+
+install-proto-tools:
+	GOBIN=$(PROTO_BIN) go install google.golang.org/protobuf/cmd/protoc-gen-go@$(PROTOC_GEN_GO_VERSION)
+	GOBIN=$(PROTO_BIN) go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@$(PROTOC_GEN_GO_GRPC_VERSION)
+
+generate:
+	@mkdir -p pkg/calendarpb
+	PATH="$(PROTO_BIN):$$PATH" go generate ./cmd/calendar
+
+.PHONY: build run build-img run-img version test lint db-up db-down db-logs db-shell install-proto-tools generate

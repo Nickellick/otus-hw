@@ -30,6 +30,10 @@ func (e Event) Validate() error {
 		return fmt.Errorf("%w: empty event ID", ErrInvalidEvent)
 	}
 
+	if e.UserID <= 0 {
+		return fmt.Errorf("%w: user ID must be positive", ErrInvalidEvent)
+	}
+
 	if e.Title == "" {
 		return fmt.Errorf("%w: empty title", ErrInvalidEvent)
 	}

@@ -21,7 +21,9 @@ linters-settings:
           - github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar
           - github.com/jackc/pgx/v5
           - github.com/rgurov/pgerrors
+          - google.golang.org/grpc
           - gopkg.in/yaml.v3
+          - google.golang.org/protobuf
       Test:
         files:
           - $test
@@ -34,6 +36,8 @@ linters-settings:
           - github.com/testcontainers/testcontainers-go
           - github.com/rgurov/pgerrors
           - github.com/jackc/pgx/v5
+          - google.golang.org/grpc
+          - google.golang.org/protobuf
 issues:
   exclude-rules:
     - path: _test\.go

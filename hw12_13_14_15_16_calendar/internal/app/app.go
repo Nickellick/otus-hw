@@ -75,3 +75,51 @@ func (a *App) ListEvents(
 ) ([]storage.Event, error) {
 	return a.storage.List(ctx, userID, from, to)
 }
+
+func (a *App) ListEventsForDay(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	start := time.Date(
+		date.Year(), date.Month(), date.Day(),
+		0, 0, 0, 0, date.Location(),
+	)
+
+	end := start.AddDate(0, 0, 1)
+
+	return a.storage.List(ctx, userID, start, end)
+}
+
+func (a *App) ListEventsForWeek(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	start := time.Date(
+		date.Year(), date.Month(), date.Day(),
+		0, 0, 0, 0, date.Location(),
+	)
+
+	daysSinceMonday := (int(start.Weekday()) + 6) % 7
+
+	start = start.AddDate(0, 0, -daysSinceMonday)
+	end := start.AddDate(0, 0, 7)
+
+	return a.storage.List(ctx, userID, start, end)
+}
+
+func (a *App) ListEventsForMonth(
+	ctx context.Context,
+	userID int64,
+	date time.Time,
+) ([]storage.Event, error) {
+	start := time.Date(
+		date.Year(), date.Month(), 1,
+		0, 0, 0, 0, date.Location(),
+	)
+
+	end := start.AddDate(0, 1, 0)
+
+	return a.storage.List(ctx, userID, start, end)
+}
