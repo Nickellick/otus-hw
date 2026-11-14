@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/outbox"
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage"
 	"github.com/google/uuid"
 	"github.com/pressly/goose/v3"
@@ -54,6 +56,108 @@ func setupTestDatabase(t *testing.T) *sql.DB {
 	require.NoError(t, goose.Up(db, migrationsDir))
 
 	return db
+}
+
+func checkUpdateCancelsOutbox(
+	ctx context.Context,
+	t *testing.T,
+	db *sql.DB,
+	store *Storage,
+	claim bool,
+) {
+	t.Helper()
+
+	now := time.Now().UTC()
+
+	event := storage.Event{
+		ID:           uuid.New(),
+		UserID:       42,
+		Title:        "Original title",
+		StartsAt:     now.Add(10 * time.Minute),
+		EndsAt:       now.Add(30 * time.Minute),
+		NotifyBefore: 15 * time.Minute,
+	}
+
+	require.NoError(t, store.Create(ctx, event))
+
+	count, err := store.EnqueueDue(ctx, now, 10)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
+
+	if claim {
+		messages, err := store.Claim(ctx, 1, time.Minute)
+		require.NoError(t, err)
+		require.Len(t, messages, 1)
+		require.Equal(t, event.ID, messages[0].EventID)
+	}
+
+	event.Title = "Updated title"
+
+	require.NoError(t, store.Update(ctx, event))
+
+	var version int64
+	require.NoError(t, db.QueryRowContext(
+		ctx,
+		`SELECT version FROM events WHERE id = $1`,
+		event.ID,
+	).Scan(&version))
+	require.EqualValues(t, 2, version)
+
+	var status string
+	var claimID sql.NullString
+
+	require.NoError(t, db.QueryRowContext(
+		ctx,
+		`SELECT status, claim_id::text
+		 FROM notification_outbox
+		 WHERE event_id = $1 AND event_version = 1`,
+		event.ID,
+	).Scan(&status, &claimID))
+
+	require.Equal(t, "cancelled", status)
+	require.False(t, claimID.Valid)
+
+	count, err = store.EnqueueDue(ctx, now, 10)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
+
+	var newVersion int64
+	require.NoError(t, db.QueryRowContext(
+		ctx,
+		`SELECT event_version
+		 FROM notification_outbox
+		 WHERE event_id = $1 AND status = 'pending'`,
+		event.ID,
+	).Scan(&newVersion))
+
+	require.EqualValues(t, 2, newVersion)
+}
+
+func createTestOutboxMessage(
+	ctx context.Context,
+	t *testing.T,
+	store *Storage,
+) uuid.UUID {
+	t.Helper()
+
+	now := time.Now().UTC()
+
+	event := storage.Event{
+		ID:           uuid.New(),
+		UserID:       42,
+		Title:        "Outbox test",
+		StartsAt:     now.Add(10 * time.Minute),
+		EndsAt:       now.Add(30 * time.Minute),
+		NotifyBefore: 15 * time.Minute,
+	}
+
+	require.NoError(t, store.Create(ctx, event))
+
+	count, err := store.EnqueueDue(ctx, now, 10)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
+
+	return event.ID
 }
 
 func TestStorage_CreateDateBusy(t *testing.T) {
@@ -314,4 +418,344 @@ func TestStorage_DeleteOldEvents(t *testing.T) {
 	deleted, err = store.DeleteOldEvents(ctx, cutoff)
 	require.NoError(t, err)
 	require.Zero(t, deleted)
+}
+
+func TestStorage_UpdateCancelsOutbox(t *testing.T) {
+	tests := []struct {
+		name  string
+		claim bool
+	}{
+		{
+			name:  "pending notification",
+			claim: false,
+		},
+		{
+			name:  "processing notification",
+			claim: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := setupTestDatabase(t)
+			store := New(db)
+			ctx := context.Background()
+
+			checkUpdateCancelsOutbox(
+				ctx,
+				t,
+				db,
+				store,
+				tt.claim,
+			)
+		})
+	}
+}
+
+func TestStorage_MarkSentAfterUpdate(t *testing.T) {
+	db := setupTestDatabase(t)
+	store := New(db)
+	ctx := context.Background()
+
+	now := time.Now().UTC()
+
+	event := storage.Event{
+		ID:           uuid.New(),
+		UserID:       42,
+		Title:        "Original",
+		StartsAt:     now.Add(10 * time.Minute),
+		EndsAt:       now.Add(30 * time.Minute),
+		NotifyBefore: 15 * time.Minute,
+	}
+
+	require.NoError(t, store.Create(ctx, event))
+
+	_, err := store.EnqueueDue(ctx, now, 10)
+	require.NoError(t, err)
+
+	messages, err := store.Claim(ctx, 1, time.Minute)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+
+	oldMessage := messages[0]
+
+	event.Title = "Updated"
+	require.NoError(t, store.Update(ctx, event))
+
+	err = store.MarkSent(ctx, oldMessage)
+	require.ErrorContains(t, err, "outbox claim no longer owned")
+
+	var sentAt sql.NullTime
+
+	require.NoError(t, db.QueryRowContext(
+		ctx,
+		`SELECT notification_sent_at
+		 FROM events
+		 WHERE id = $1`,
+		event.ID,
+	).Scan(&sentAt))
+
+	require.False(t, sentAt.Valid)
+
+	count, err := store.EnqueueDue(ctx, now, 10)
+	require.NoError(t, err)
+	require.EqualValues(t, 1, count)
+}
+
+func TestStorage_OutboxLeaseRecovery(t *testing.T) {
+	db := setupTestDatabase(t)
+	store := New(db)
+	ctx := context.Background()
+
+	eventID := createTestOutboxMessage(ctx, t, store)
+
+	first, err := store.Claim(ctx, 1, 200*time.Millisecond)
+	require.NoError(t, err)
+	require.Len(t, first, 1)
+	require.Equal(t, eventID, first[0].EventID)
+
+	// Имитируем падение Worker - не вызываем ни MarkSent(), ни Cancel()
+	// После истечения аренды сообщение должно снова стать доступным
+	var second []outbox.ClaimedMessage
+
+	require.Eventually(t, func() bool {
+		messages, claimErr := store.Claim(
+			ctx,
+			1,
+			time.Minute,
+		)
+		if claimErr != nil {
+			return false
+		}
+
+		second = messages
+		return len(second) == 1
+	}, 5*time.Second, 50*time.Millisecond)
+
+	require.Equal(t, first[0].ID, second[0].ID)
+	require.Equal(t, first[0].EventID, second[0].EventID)
+	require.NotEqual(t, first[0].ClaimID, second[0].ClaimID)
+
+	// Старый Worker больше не владеет сообщением
+	err = store.MarkSent(ctx, first[0])
+	require.ErrorContains(t, err, "outbox claim no longer owned")
+
+	// Новый Worker подхватывает обработку
+	require.NoError(t, store.MarkSent(ctx, second[0]))
+
+	var status string
+
+	require.NoError(t, db.QueryRowContext(
+		ctx,
+		`SELECT status
+		 FROM notification_outbox
+		 WHERE id = $1`,
+		second[0].ID,
+	).Scan(&status))
+
+	require.Equal(t, "sent", status)
+}
+
+func TestStorage_OutboxConcurrentClaim(t *testing.T) {
+	db := setupTestDatabase(t)
+	store := New(db)
+	ctx := context.Background()
+
+	eventID := createTestOutboxMessage(ctx, t, store)
+
+	type claimResult struct {
+		messages []outbox.ClaimedMessage
+		err      error
+	}
+
+	const workers = 2
+
+	results := make(chan claimResult, workers)
+	start := make(chan struct{})
+
+	var wg sync.WaitGroup
+
+	for i := 0; i < workers; i++ {
+		wg.Add(1)
+
+		go func() {
+			defer wg.Done()
+
+			// Оба Worker стартуют одновременно.
+			<-start
+
+			messages, err := store.Claim(
+				ctx,
+				1,
+				time.Minute,
+			)
+
+			results <- claimResult{
+				messages: messages,
+				err:      err,
+			}
+		}()
+	}
+
+	close(start)
+	wg.Wait()
+	close(results)
+
+	var claimed []outbox.ClaimedMessage
+
+	for result := range results {
+		require.NoError(t, result.err)
+		claimed = append(claimed, result.messages...)
+	}
+
+	// Только один Worker получил сообщение
+	require.Len(t, claimed, 1)
+	require.Equal(t, eventID, claimed[0].EventID)
+
+	var status string
+	var claimID uuid.UUID
+
+	require.NoError(t, db.QueryRowContext(
+		ctx,
+		`SELECT status, claim_id
+		 FROM notification_outbox
+		 WHERE id = $1`,
+		claimed[0].ID,
+	).Scan(&status, &claimID))
+
+	require.Equal(t, "processing", status)
+	require.Equal(t, claimed[0].ClaimID, claimID)
+}
+
+func TestStorage_ConcurrentUpdateAndMarkSent(t *testing.T) {
+	db := setupTestDatabase(t)
+	store := New(db)
+
+	const iterations = 20
+
+	for i := 0; i < iterations; i++ {
+		t.Run(fmt.Sprintf("iteration_%d", i), func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(
+				context.Background(),
+				10*time.Second,
+			)
+			defer cancel()
+
+			now := time.Now().UTC()
+
+			event := storage.Event{
+				ID:           uuid.New(),
+				UserID:       int64(i + 100),
+				Title:        "Original",
+				StartsAt:     now.Add(10 * time.Minute),
+				EndsAt:       now.Add(30 * time.Minute),
+				NotifyBefore: 15 * time.Minute,
+			}
+
+			require.NoError(t, store.Create(ctx, event))
+
+			count, err := store.EnqueueDue(ctx, now, 1)
+			require.NoError(t, err)
+			require.EqualValues(t, 1, count)
+
+			messages, err := store.Claim(ctx, 1, time.Minute)
+			require.NoError(t, err)
+			require.Len(t, messages, 1)
+
+			msg := messages[0]
+
+			updatedEvent := event
+			updatedEvent.Title = "Updated"
+
+			type result struct {
+				operation string
+				err       error
+			}
+
+			results := make(chan result, 2)
+			start := make(chan struct{})
+
+			var wg sync.WaitGroup
+
+			wg.Add(2)
+
+			go func() {
+				defer wg.Done()
+				<-start
+
+				err := store.Update(ctx, updatedEvent)
+				results <- result{
+					operation: "update",
+					err:       err,
+				}
+			}()
+
+			go func() {
+				defer wg.Done()
+				<-start
+
+				err := store.MarkSent(ctx, msg)
+				results <- result{
+					operation: "mark_sent",
+					err:       err,
+				}
+			}()
+
+			// Одновременно запускаем обе операции.
+			close(start)
+
+			wg.Wait()
+			close(results)
+
+			var updateErr, markSentErr error
+
+			for r := range results {
+				switch r.operation {
+				case "update":
+					updateErr = r.err
+				case "mark_sent":
+					markSentErr = r.err
+				}
+			}
+
+			require.NoError(t, updateErr)
+
+			if markSentErr != nil {
+				require.ErrorContains(
+					t,
+					markSentErr,
+					"outbox claim no longer owned",
+				)
+			}
+
+			var version int64
+			var sentAt sql.NullTime
+
+			require.NoError(t, db.QueryRowContext(
+				ctx,
+				`SELECT version, notification_sent_at
+				 FROM events WHERE id = $1`,
+				event.ID,
+			).Scan(&version, &sentAt))
+
+			require.EqualValues(t, 2, version)
+			require.False(t, sentAt.Valid)
+
+			var status string
+
+			require.NoError(t, db.QueryRowContext(
+				ctx,
+				`SELECT status
+				 FROM notification_outbox
+				 WHERE id = $1`,
+				msg.ID,
+			).Scan(&status))
+
+			if markSentErr == nil {
+				require.Equal(t, "sent", status)
+			} else {
+				require.Equal(t, "cancelled", status)
+			}
+		})
+	}
 }

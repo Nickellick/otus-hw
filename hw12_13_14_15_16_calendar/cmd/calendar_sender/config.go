@@ -16,9 +16,16 @@ type RabbitMQConf struct {
 	URL string `yaml:"url"`
 }
 
+type PostgresConf struct {
+	DSN          string `yaml:"dsn"`
+	MaxOpenConns int    `yaml:"maxOpenConns"`
+	MaxIdleConns int    `yaml:"maxIdleConns"`
+}
+
 type Config struct {
 	Logger   LoggerConf   `yaml:"logger"`
 	RabbitMQ RabbitMQConf `yaml:"rabbitmq"`
+	Postgres PostgresConf `yaml:"postgres"`
 }
 
 func NewConfig() Config {

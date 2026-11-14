@@ -7,6 +7,7 @@ import (
 
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/notification"
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/queue"
+	"github.com/google/uuid"
 )
 
 type Logger interface {
@@ -14,14 +15,24 @@ type Logger interface {
 	Error(msg string, args ...any)
 }
 
+type Storage interface {
+	IsNotificationActual(
+		ctx context.Context,
+		eventID uuid.UUID,
+		version int64,
+	) (bool, error)
+}
+
 type Sender struct {
 	consumer queue.Consumer
+	storage  Storage
 	logger   Logger
 }
 
-func New(consumer queue.Consumer, logger Logger) *Sender {
+func New(consumer queue.Consumer, storage Storage, logger Logger) *Sender {
 	return &Sender{
 		consumer: consumer,
+		storage:  storage,
 		logger:   logger,
 	}
 }
@@ -44,13 +55,12 @@ func (s *Sender) Run(ctx context.Context) error {
 				}
 				return nil
 			}
-
-			s.handle(message)
+			s.handle(ctx, message)
 		}
 	}
 }
 
-func (s *Sender) handle(message queue.Delivery) {
+func (s *Sender) handle(ctx context.Context, message queue.Delivery) {
 	var notification notification.Notification
 
 	if err := json.Unmarshal(message.Body(), &notification); err != nil {
@@ -69,6 +79,43 @@ func (s *Sender) handle(message queue.Delivery) {
 		return
 	}
 
+	actual, err := s.storage.IsNotificationActual(
+		ctx,
+		notification.EventID,
+		notification.EventVersion,
+	)
+	if err != nil {
+		s.logger.Error(
+			"check notification actuality failed",
+			"event_id", notification.EventID.String(),
+			"error", err,
+		)
+
+		if err := message.Nack(true); err != nil {
+			s.logger.Error(
+				"failed to requeue notification",
+				"error", err,
+			)
+		}
+		return
+	}
+
+	if !actual {
+		s.logger.Info(
+			"stale notification skipped",
+			"event_id", notification.EventID.String(),
+			"event_version", notification.EventVersion,
+		)
+
+		if err := message.Ack(); err != nil {
+			s.logger.Error(
+				"failed to acknowledge stale notification",
+				"event_id", notification.EventID.String(),
+				"error", err,
+			)
+		}
+		return
+	}
 	s.logger.Info(
 		"notification received",
 		"event_id", notification.EventID.String(),

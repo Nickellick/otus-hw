@@ -12,6 +12,7 @@ import (
 
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/queue/rabbitmq"
 	"github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/sender"
+	sqlstorage "github.com/Nickellick/otus-hw/hw12_13_14_15_16_calendar/internal/storage/sql"
 )
 
 var configFile string
@@ -56,7 +57,18 @@ func run() error {
 	}
 	defer consumer.Close()
 
-	service := sender.New(consumer, logger)
+	db, err := sqlstorage.Connect(ctx, config.Postgres.DSN)
+	if err != nil {
+		return fmt.Errorf("connect to PostgreSQL: %w", err)
+	}
+	defer db.Close()
+
+	db.SetMaxOpenConns(config.Postgres.MaxOpenConns)
+	db.SetMaxIdleConns(config.Postgres.MaxIdleConns)
+
+	store := sqlstorage.New(db)
+
+	service := sender.New(consumer, store, logger)
 
 	logger.Info("calendar sender started")
 

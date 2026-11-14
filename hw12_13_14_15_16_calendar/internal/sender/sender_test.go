@@ -63,14 +63,28 @@ func (l *fakeLogger) Error(string, ...any) {
 	l.errorCount++
 }
 
+type fakeStorage struct {
+	actual bool
+	err    error
+}
+
+func (s *fakeStorage) IsNotificationActual(
+	_ context.Context,
+	_ uuid.UUID,
+	_ int64,
+) (bool, error) {
+	return s.actual, s.err
+}
+
 func validDelivery(t *testing.T) *fakeDelivery {
 	t.Helper()
 
 	body, err := json.Marshal(notification.Notification{
-		EventID:  uuid.New(),
-		Title:    "Team meeting",
-		StartsAt: time.Now().Add(time.Hour),
-		UserID:   42,
+		EventID:      uuid.New(),
+		EventVersion: 1,
+		Title:        "Team meeting",
+		StartsAt:     time.Now().Add(time.Hour),
+		UserID:       42,
 	})
 	require.NoError(t, err)
 
@@ -79,18 +93,51 @@ func validDelivery(t *testing.T) *fakeDelivery {
 
 func TestSenderHandle(t *testing.T) {
 	tests := []struct {
-		name       string
-		delivery   func(*testing.T) *fakeDelivery
-		wantAck    bool
-		wantNack   bool
-		wantInfo   int
-		wantErrors int
+		name        string
+		delivery    func(*testing.T) *fakeDelivery
+		storage     *fakeStorage
+		wantAck     bool
+		wantNack    bool
+		wantRequeue bool
+		wantInfo    int
+		wantErrors  int
 	}{
 		{
 			name:     "valid notification",
 			delivery: validDelivery,
+			storage:  &fakeStorage{actual: true},
 			wantAck:  true,
 			wantInfo: 1,
+		},
+		{
+			name:     "stale notification",
+			delivery: validDelivery,
+			storage:  &fakeStorage{actual: false},
+			wantAck:  true,
+			wantInfo: 1,
+		},
+		{
+			name:     "storage failure",
+			delivery: validDelivery,
+			storage: &fakeStorage{
+				err: errors.New("database unavailable"),
+			},
+			wantNack:    true,
+			wantRequeue: true,
+			wantErrors:  1,
+		},
+		{
+			name: "storage failure and nack failure",
+			delivery: func(t *testing.T) *fakeDelivery {
+				t.Helper()
+				d := validDelivery(t)
+				d.nackErr = errors.New("connection closed")
+				return d
+			},
+			storage:     &fakeStorage{err: errors.New("database unavailable")},
+			wantNack:    true,
+			wantRequeue: true,
+			wantErrors:  2,
 		},
 		{
 			name: "invalid JSON",
@@ -99,6 +146,7 @@ func TestSenderHandle(t *testing.T) {
 					body: []byte(`{"eventId":`),
 				}
 			},
+			storage:    &fakeStorage{actual: true},
 			wantNack:   true,
 			wantErrors: 1,
 		},
@@ -106,11 +154,11 @@ func TestSenderHandle(t *testing.T) {
 			name: "ack failure",
 			delivery: func(t *testing.T) *fakeDelivery {
 				t.Helper()
-
 				d := validDelivery(t)
 				d.ackErr = errors.New("connection closed")
 				return d
 			},
+			storage:    &fakeStorage{actual: true},
 			wantAck:    true,
 			wantInfo:   1,
 			wantErrors: 1,
@@ -123,6 +171,7 @@ func TestSenderHandle(t *testing.T) {
 					nackErr: errors.New("connection closed"),
 				}
 			},
+			storage:    &fakeStorage{actual: true},
 			wantNack:   true,
 			wantErrors: 2,
 		},
@@ -131,14 +180,14 @@ func TestSenderHandle(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logger := &fakeLogger{}
-			s := New(nil, logger)
+			s := New(nil, tt.storage, logger)
 			message := tt.delivery(t)
 
-			s.handle(message)
+			s.handle(context.Background(), message)
 
 			require.Equal(t, tt.wantAck, message.acked)
 			require.Equal(t, tt.wantNack, message.nacked)
-			require.False(t, message.requeue)
+			require.Equal(t, tt.wantRequeue, message.requeue)
 			require.Equal(t, tt.wantInfo, logger.infoCount)
 			require.Equal(t, tt.wantErrors, logger.errorCount)
 		})
@@ -151,6 +200,7 @@ func TestSenderRun(t *testing.T) {
 
 		s := New(
 			&fakeConsumer{err: expected},
+			&fakeStorage{actual: true},
 			&fakeLogger{},
 		)
 
@@ -164,6 +214,7 @@ func TestSenderRun(t *testing.T) {
 
 		s := New(
 			&fakeConsumer{deliveries: deliveries},
+			&fakeStorage{actual: true},
 			&fakeLogger{},
 		)
 
@@ -179,6 +230,7 @@ func TestSenderRun(t *testing.T) {
 			&fakeConsumer{
 				deliveries: make(chan queue.Delivery),
 			},
+			&fakeStorage{actual: true},
 			&fakeLogger{},
 		)
 
