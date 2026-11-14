@@ -72,14 +72,6 @@ run-rabbit:
 run: build
 	$(BIN) -config ./configs/config.yaml
 
-build-scheduler:
-	go build -v -o ./bin/calendar_scheduler \
-		-ldflags "$(LDFLAGS)" \
-		./cmd/calendar_scheduler
-
-run-scheduler: build-scheduler
-	./bin/calendar_scheduler -config ./configs/scheduler.yaml
-
 build-img:
 	docker build \
 		--build-arg=LDFLAGS="$(LDFLAGS)" \
